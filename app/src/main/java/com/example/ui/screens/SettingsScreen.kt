@@ -125,18 +125,23 @@ fun SettingsScreen(
                 context.contentResolver.takePersistableUriPermission(uri, takeFlags)
             } catch (_: Exception) {}
 
-            // Extract displayable folder path
+            viewModel.setStorageTreeUri(uri.toString())
+
+            // Extract displayable folder name
             val pathSegment = uri.path ?: uri.toString()
-            val cleanPath = when {
+            val cleanFolder = when {
                 pathSegment.contains("primary:") -> {
-                    val sub = pathSegment.substringAfter("primary:")
-                    "/storage/emulated/0/$sub"
+                    val sub = pathSegment.substringAfter("primary:").trim('/')
+                    if (sub.isNotBlank()) sub else "AvaTTS"
                 }
-                pathSegment.contains(":") -> pathSegment.substringAfter(":")
-                else -> pathSegment
+                pathSegment.contains(":") -> {
+                    val sub = pathSegment.substringAfter(":").trim('/')
+                    if (sub.isNotBlank()) sub else "AvaTTS"
+                }
+                else -> pathSegment.substringAfterLast("/").ifBlank { "AvaTTS" }
             }
-            viewModel.userPreferences.updateStorageFolder(cleanPath)
-            viewModel.showSnackbar("پوشه مقصد با موفقیت تنظیم شد: $cleanPath")
+            viewModel.setStorageFolder(cleanFolder)
+            viewModel.showSnackbar("پوشه مقصد با موفقیت تنظیم شد: $cleanFolder")
         }
     }
 
@@ -164,8 +169,15 @@ fun SettingsScreen(
         }
 
         // =========================================================
-        // VAULT SECTION (Requirement 2: انتقال کامل گاوصندوق به تنظیمات)
+        // SECTION 1: VAULT
         // =========================================================
+        item {
+            SettingsSectionHeader(
+                title = "۱. گاوصندوق کلیدهای امنیتی (API Keys)",
+                subtitle = "مدیریت کلیدها، چرخش هوشمند خودکار و وضعیت سهمیه",
+                icon = Icons.Default.Key
+            )
+        }
         item {
             Card(
                 shape = RoundedCornerShape(20.dp),
@@ -336,8 +348,15 @@ fun SettingsScreen(
         }
 
         // =========================================================
-        // STORAGE DIRECTORY SETTING (Requirement 4: رفع باگ مسیر ذخیره و انتخاب پوشه)
+        // SECTION 2: STORAGE DIRECTORY
         // =========================================================
+        item {
+            SettingsSectionHeader(
+                title = "۲. پوشه مقصد و ذخیره‌سازی فایل‌ها",
+                subtitle = "مدیریت مسیر ذخیره فایل‌های صوتی و دسترسی به فایل‌ها",
+                icon = Icons.Default.Folder
+            )
+        }
         item {
             Card(
                 shape = RoundedCornerShape(20.dp),
@@ -386,13 +405,49 @@ fun SettingsScreen(
                         value = folderText,
                         onValueChange = {
                             folderText = it
-                            viewModel.userPreferences.updateStorageFolder(it)
+                            viewModel.setStorageFolder(it)
                         },
                         label = { Text("نام یا مسیر پوشه مقصد") },
-                        placeholder = { Text("TTS یا مسیر کامل") },
+                        placeholder = { Text("AvaTTS یا مسیر کامل") },
                         shape = RoundedCornerShape(12.dp),
                         modifier = Modifier.fillMaxWidth().testTag("input_storage_folder")
                     )
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    // Quick Suggestion Chips for Storage Folder
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "پیشنهادها:",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        listOf("AvaTTS", "Podcasts", "Music/TTS").forEach { preset ->
+                            val isSelected = settings.defaultStorageFolder == preset
+                            Surface(
+                                shape = RoundedCornerShape(8.dp),
+                                color = if (isSelected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .clickable {
+                                        folderText = preset
+                                        viewModel.setStorageFolder(preset)
+                                    }
+                            ) {
+                                Text(
+                                    text = preset,
+                                    fontSize = 11.sp,
+                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                                    color = if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                                )
+                            }
+                        }
+                    }
 
                     Spacer(modifier = Modifier.height(10.dp))
 
@@ -439,8 +494,15 @@ fun SettingsScreen(
         }
 
         // =========================================================
-        // GOOGLE TTS MODEL CONFIGURATION
+        // SECTION 3: GOOGLE TTS MODEL
         // =========================================================
+        item {
+            SettingsSectionHeader(
+                title = "۳. هوش مصنوعی و مدل صوتی گوگل",
+                subtitle = "انتخاب مدل Gemini TTS و موتور سنتز صدا",
+                icon = Icons.Default.AutoAwesome
+            )
+        }
         item {
             Card(
                 shape = RoundedCornerShape(20.dp),
@@ -548,8 +610,15 @@ fun SettingsScreen(
         }
 
         // =========================================================
-        // THEME MODE SECTION (System, Light, Dark)
+        // SECTION 4: APPEARANCE & THEME
         // =========================================================
+        item {
+            SettingsSectionHeader(
+                title = "۴. ظاهر و قالب برنامه",
+                subtitle = "شخصی‌سازی حالت روز/شب و انتخاب از بین ۵ پالت رنگی مدرن",
+                icon = Icons.Default.Palette
+            )
+        }
         item {
             Card(
                 shape = RoundedCornerShape(20.dp),
@@ -698,8 +767,15 @@ fun SettingsScreen(
         }
 
         // =========================================================
-        // RESET TO DEFAULTS
+        // SECTION 5: MAINTENANCE & RESET
         // =========================================================
+        item {
+            SettingsSectionHeader(
+                title = "۵. نگهداری و بازنشانی سامانه",
+                subtitle = "پاکسازی گزارش‌ها و بازیابی تنظیمات کارخانه",
+                icon = Icons.Default.Restore
+            )
+        }
         item {
             Card(
                 shape = RoundedCornerShape(20.dp),
@@ -1008,6 +1084,50 @@ fun VaultKeyRowItem(
                     }
                 }
             }
+        }
+    }
+}
+
+@Composable
+fun SettingsSectionHeader(
+    title: String,
+    subtitle: String,
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    modifier: Modifier = Modifier
+) {
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(top = 10.dp, bottom = 2.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Surface(
+            shape = CircleShape,
+            color = MaterialTheme.colorScheme.primaryContainer,
+            modifier = Modifier.size(34.dp)
+        ) {
+            Box(contentAlignment = Alignment.Center) {
+                Icon(
+                    imageVector = icon,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(18.dp)
+                )
+            }
+        }
+        Spacer(modifier = Modifier.width(10.dp))
+        Column {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+            Text(
+                text = subtitle,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
         }
     }
 }

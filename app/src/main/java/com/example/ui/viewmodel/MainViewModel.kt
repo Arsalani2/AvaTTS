@@ -665,12 +665,22 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     // Settings & Theme
     fun setThemeMode(mode: ThemeMode) {
         userPreferences.updateThemeMode(mode)
-        _showRestartDialog.value = true
     }
 
     fun setThemePalette(palette: ThemePalette) {
         userPreferences.updateThemePalette(palette)
-        _showRestartDialog.value = true
+    }
+
+    fun setCircularChart(isCircular: Boolean) {
+        userPreferences.updateCircularChart(isCircular)
+    }
+
+    fun setStorageFolder(folder: String) {
+        userPreferences.updateStorageFolder(folder)
+    }
+
+    fun setStorageTreeUri(uri: String) {
+        userPreferences.updateStorageTreeUri(uri)
     }
 
     fun dismissRestartDialog() {
@@ -680,7 +690,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun resetSettingsToDefault() {
         userPreferences.resetToDefaults()
         showSnackbar("تنظیمات به حالت پیش‌فرض بازگشت.")
-        _showRestartDialog.value = true
     }
 
     fun clearLogs() {

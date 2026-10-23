@@ -50,6 +50,8 @@ Thumbs.db
 *.jks
 *.keystore
 debug.keystore
+release-key.jks
+keystore.base64.txt
 
 # AI Studio
 .aistudio/

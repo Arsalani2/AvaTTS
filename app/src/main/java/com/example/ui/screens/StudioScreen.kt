@@ -21,7 +21,9 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.widthIn
@@ -94,6 +96,7 @@ import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.filled.GridView
 import androidx.compose.material.icons.filled.ViewAgenda
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.saveable.rememberSaveable
 import java.io.BufferedReader
 import java.io.InputStreamReader
@@ -107,6 +110,7 @@ fun StudioScreen(
     val context = LocalContext.current
     val clipboardManager = LocalClipboardManager.current
 
+    val projects by viewModel.projects.collectAsState()
     val currentText by viewModel.currentText.collectAsState()
     val chunkSizeInput by viewModel.chunkSizeInput.collectAsState()
     val selectedVoiceName by viewModel.selectedVoiceName.collectAsState()
@@ -134,6 +138,32 @@ fun StudioScreen(
                 }
             } catch (e: Exception) {
                 viewModel.showSnackbar("خطا در خواندن فایل: ${e.message}")
+            }
+        }
+    }
+
+    // Auto-scroll list to active chunk as conversion progresses (in both rectangular and square modes)
+    LaunchedEffect(queueState.activeChunkId, queueState.completedInQueue) {
+        if (chunks.isNotEmpty() && (queueState.isRunning || queueState.activeChunkId != null)) {
+            val activeIndex = chunks.indexOfFirst { it.id == queueState.activeChunkId }
+            val targetIndex = if (activeIndex >= 0) activeIndex else chunks.indexOfFirst { it.status != ChunkEntity.STATUS_COMPLETED }
+            if (targetIndex >= 0) {
+                var headerCount = 1 // project_header
+                if (projects.isNotEmpty()) headerCount++ // project selector
+                if (selectedProject != null) headerCount++ // project summary
+                if (!isLocked) headerCount += 3 // text editor, voice card, chunk controls
+                if (chunks.isNotEmpty()) headerCount++ // progress chart
+                headerCount++ // queue management
+                headerCount++ // chunks_header
+
+                val scrollIndex = if (!isSquareLayout) {
+                    headerCount + targetIndex
+                } else {
+                    headerCount + (targetIndex / 2)
+                }
+                try {
+                    listState.animateScrollToItem(scrollIndex)
+                } catch (_: Exception) {}
             }
         }
     }
@@ -582,7 +612,11 @@ fun StudioScreen(
         // Project Progress Chart (Linear and Circular with Toggle)
         if (chunks.isNotEmpty()) {
             item {
-                ProjectProgressChartCard(chunks = chunks)
+                ProjectProgressChartCard(
+                    chunks = chunks,
+                    isCircularView = settings.isCircularChart,
+                    onToggleCircularView = { viewModel.setCircularChart(it) }
+                )
             }
         }
 
@@ -1396,6 +1430,8 @@ fun ChunkItemSquareCard(
 @Composable
 fun ProjectProgressChartCard(
     chunks: List<ChunkEntity>,
+    isCircularView: Boolean,
+    onToggleCircularView: (Boolean) -> Unit,
     modifier: Modifier = Modifier
 ) {
     if (chunks.isEmpty()) return
@@ -1405,8 +1441,6 @@ fun ProjectProgressChartCard(
     val failedCount = chunks.count { it.status == ChunkEntity.STATUS_FAILED }
     val pendingCount = totalCount - completedCount - failedCount
     val percent = if (totalCount > 0) (completedCount * 100) / totalCount else 0
-
-    var isCircularView by remember { mutableStateOf(false) }
 
     Card(
         shape = RoundedCornerShape(20.dp),
@@ -1465,7 +1499,7 @@ fun ProjectProgressChartCard(
                             color = if (!isCircularView) MaterialTheme.colorScheme.primary else Color.Transparent,
                             modifier = Modifier
                                 .clip(RoundedCornerShape(10.dp))
-                                .clickable { isCircularView = false }
+                                .clickable { onToggleCircularView(false) }
                         ) {
                             Row(
                                 modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
@@ -1492,7 +1526,7 @@ fun ProjectProgressChartCard(
                             color = if (isCircularView) MaterialTheme.colorScheme.primary else Color.Transparent,
                             modifier = Modifier
                                 .clip(RoundedCornerShape(10.dp))
-                                .clickable { isCircularView = true }
+                                .clickable { onToggleCircularView(true) }
                         ) {
                             Row(
                                 modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
@@ -1520,17 +1554,26 @@ fun ProjectProgressChartCard(
             Spacer(modifier = Modifier.height(14.dp))
 
             if (!isCircularView) {
-                // LINEAR SEGMENTED BAR (🟰🟰➖🟰)
+                // LINEAR SEGMENTED BAR (Auto-scrolling LazyRow)
                 Column(modifier = Modifier.fillMaxWidth()) {
-                    val scrollState = rememberScrollState()
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .horizontalScroll(scrollState),
+                    val lazyRowState = rememberLazyListState()
+                    val activeIndex = chunks.indexOfFirst { it.status != ChunkEntity.STATUS_COMPLETED }
+
+                    LaunchedEffect(activeIndex, chunks.count { it.status == ChunkEntity.STATUS_COMPLETED }) {
+                        if (activeIndex >= 0) {
+                            try {
+                                lazyRowState.animateScrollToItem(activeIndex)
+                            } catch (_: Exception) {}
+                        }
+                    }
+
+                    LazyRow(
+                        state = lazyRowState,
+                        modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(6.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        chunks.forEach { chunk ->
+                        items(chunks, key = { it.id }) { chunk ->
                             val (bgColor, borderColor, textColor) = when (chunk.status) {
                                 ChunkEntity.STATUS_COMPLETED -> Triple(Color(0xFF10B981), Color(0xFF059669), Color.White)
                                 ChunkEntity.STATUS_FAILED -> Triple(Color(0xFFEF4444), Color(0xFFDC2626), Color.White)

@@ -16,44 +16,50 @@ class FileManager(
 
     /**
      * Resolves the root TTS directory.
-     * Prioritizes customPath if provided, then userPreferences.defaultStorageFolder,
-     * then Scoped Storage Music/TTS, and finally internal storage.
+     * Prioritizes custom user folder in standard public directories (Music / Downloads)
+     * so that the user and external file manager apps can easily access and view the files.
      */
     fun getRootTtsDirectory(customPath: String? = null): File {
-        val configuredPath = customPath?.ifBlank { null }
-            ?: userPreferences?.settings?.value?.defaultStorageFolder?.ifBlank { null }
+        val configured = customPath?.trim()?.ifBlank { null }
+            ?: userPreferences?.settings?.value?.defaultStorageFolder?.trim()?.ifBlank { null }
+            ?: "AvaTTS"
 
-        if (!configuredPath.isNullOrBlank() && configuredPath != "TTS") {
-            try {
-                val custom = File(configuredPath)
-                if (custom.isAbsolute) {
-                    if (custom.exists() || custom.mkdirs()) {
-                        return custom
-                    }
-                } else {
-                    val appExt = context.getExternalFilesDir(Environment.DIRECTORY_MUSIC)
-                    val customDir = File(appExt, configuredPath)
-                    if (customDir.exists() || customDir.mkdirs()) {
-                        return customDir
-                    }
-                }
-            } catch (_: Exception) {}
-        }
+        // If user gave a relative name like "AvaTTS" or "Podcasts"
+        val folderName = if (configured.contains("/")) configured.substringAfterLast("/").ifBlank { "AvaTTS" } else configured
 
-        // Standard external app storage (Scoped Storage compliant, no permissions needed)
+        // 1. Try public Music folder (most accessible for audio/TTS files)
         try {
-            val appExternal = File(context.getExternalFilesDir(Environment.DIRECTORY_MUSIC), "TTS")
-            if (appExternal.exists() || appExternal.mkdirs()) {
-                return appExternal
+            val publicMusic = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_MUSIC)
+            val customDir = File(publicMusic, folderName)
+            if (customDir.exists() || customDir.mkdirs()) {
+                return customDir
             }
         } catch (_: Exception) {}
 
-        // Fallback to internal storage
-        val internalTts = File(context.filesDir, "TTS")
-        if (!internalTts.exists()) {
-            internalTts.mkdirs()
+        // 2. Try public Downloads folder
+        try {
+            val publicDownloads = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
+            val customDir = File(publicDownloads, folderName)
+            if (customDir.exists() || customDir.mkdirs()) {
+                return customDir
+            }
+        } catch (_: Exception) {}
+
+        // 3. Fallback to App's External Music directory
+        try {
+            val appExt = context.getExternalFilesDir(Environment.DIRECTORY_MUSIC)
+            val customDir = File(appExt, folderName)
+            if (customDir.exists() || customDir.mkdirs()) {
+                return customDir
+            }
+        } catch (_: Exception) {}
+
+        // 4. Final Fallback to internal storage
+        val internalDir = File(context.filesDir, folderName)
+        if (!internalDir.exists()) {
+            internalDir.mkdirs()
         }
-        return internalTts
+        return internalDir
     }
 
     /**
@@ -127,26 +133,58 @@ class FileManager(
                 val file = File(pathOrFile)
                 val target = if (file.exists()) file else file.parentFile ?: file
 
-                val uri: Uri = try {
-                    FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", target)
-                } catch (_: Exception) {
-                    Uri.fromFile(target)
-                }
+                if (target.isDirectory) {
+                    val uri: Uri = try {
+                        FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", target)
+                    } catch (_: Exception) {
+                        Uri.fromFile(target)
+                    }
 
-                val mime = when {
-                    target.isDirectory -> "*/*"
-                    target.name.endsWith(".wav", ignoreCase = true) -> "audio/wav"
-                    target.name.endsWith(".mp3", ignoreCase = true) -> "audio/mpeg"
-                    else -> "audio/*"
-                }
+                    val candidateMimes = listOf(
+                        "resource/folder",
+                        "vnd.android.document/directory",
+                        "*/*"
+                    )
 
-                val intent = Intent(Intent.ACTION_VIEW).apply {
-                    setDataAndType(uri, mime)
-                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK)
+                    var launched = false
+                    for (mime in candidateMimes) {
+                        try {
+                            val intent = Intent(Intent.ACTION_VIEW).apply {
+                                setDataAndType(uri, mime)
+                                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK)
+                            }
+                            val chooser = Intent.createChooser(intent, "مشاهده در مدیریت فایل")
+                            chooser.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                            context.startActivity(chooser)
+                            launched = true
+                            break
+                        } catch (_: Exception) {}
+                    }
+
+                    if (!launched) {
+                        Toast.makeText(context, "مسیر پوشه:\n${target.absolutePath}", Toast.LENGTH_LONG).show()
+                    }
+                } else {
+                    val uri: Uri = try {
+                        FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", target)
+                    } catch (_: Exception) {
+                        Uri.fromFile(target)
+                    }
+
+                    val mime = when {
+                        target.name.endsWith(".wav", ignoreCase = true) -> "audio/wav"
+                        target.name.endsWith(".mp3", ignoreCase = true) -> "audio/mpeg"
+                        else -> "audio/*"
+                    }
+
+                    val intent = Intent(Intent.ACTION_VIEW).apply {
+                        setDataAndType(uri, mime)
+                        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK)
+                    }
+                    val chooser = Intent.createChooser(intent, "مدیریت فایل یا پخش صوت")
+                    chooser.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    context.startActivity(chooser)
                 }
-                val chooser = Intent.createChooser(intent, "مدیریت فایل یا پخش صوت")
-                chooser.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                context.startActivity(chooser)
             } catch (e: Exception) {
                 Toast.makeText(context, "مسیر فایل: $pathOrFile", Toast.LENGTH_LONG).show()
             }

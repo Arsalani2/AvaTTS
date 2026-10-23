@@ -28,7 +28,9 @@ data class AppSettings(
     val defaultStorageFolder: String = "TTS",
     val speechRate: Float = 1.0f,
     val ttsModelName: String = "gemini-2.5-flash-preview-tts",
-    val isSquareLayout: Boolean = false
+    val isSquareLayout: Boolean = false,
+    val isCircularChart: Boolean = false,
+    val storageTreeUri: String = ""
 )
 
 class UserPreferences(context: Context) {
@@ -52,48 +54,61 @@ class UserPreferences(context: Context) {
             defaultStorageFolder = prefs.getString("default_storage_folder", "TTS") ?: "TTS",
             speechRate = prefs.getFloat("speech_rate", 1.0f),
             ttsModelName = prefs.getString("tts_model_name", "gemini-2.5-flash-preview-tts") ?: "gemini-2.5-flash-preview-tts",
-            isSquareLayout = prefs.getBoolean("is_square_layout", false)
+            isSquareLayout = prefs.getBoolean("is_square_layout", false),
+            isCircularChart = prefs.getBoolean("is_circular_chart", false),
+            storageTreeUri = prefs.getString("storage_tree_uri", "") ?: ""
         )
     }
 
     fun updateSquareLayout(isSquare: Boolean) {
-        prefs.edit().putBoolean("is_square_layout", isSquare).apply()
+        prefs.edit().putBoolean("is_square_layout", isSquare).commit()
         _settings.value = _settings.value.copy(isSquareLayout = isSquare)
+    }
+
+    fun updateCircularChart(isCircular: Boolean) {
+        prefs.edit().putBoolean("is_circular_chart", isCircular).commit()
+        _settings.value = _settings.value.copy(isCircularChart = isCircular)
+    }
+
+    fun updateStorageTreeUri(uriString: String) {
+        prefs.edit().putString("storage_tree_uri", uriString).commit()
+        _settings.value = _settings.value.copy(storageTreeUri = uriString)
     }
 
     fun updateTtsModelName(modelName: String) {
         val trimmed = modelName.trim().ifBlank { "gemini-2.5-flash-preview-tts" }
-        prefs.edit().putString("tts_model_name", trimmed).apply()
+        prefs.edit().putString("tts_model_name", trimmed).commit()
         _settings.value = _settings.value.copy(ttsModelName = trimmed)
     }
 
     fun updateThemeMode(mode: ThemeMode) {
-        prefs.edit().putString("theme_mode", mode.name).apply()
+        prefs.edit().putString("theme_mode", mode.name).commit()
         _settings.value = _settings.value.copy(themeMode = mode)
     }
 
     fun updateThemePalette(palette: ThemePalette) {
-        prefs.edit().putString("theme_palette", palette.name).apply()
+        prefs.edit().putString("theme_palette", palette.name).commit()
         _settings.value = _settings.value.copy(themePalette = palette)
     }
 
     fun updateDefaultChunkSize(chunkSize: Int) {
-        prefs.edit().putInt("default_chunk_size", chunkSize).apply()
+        prefs.edit().putInt("default_chunk_size", chunkSize).commit()
         _settings.value = _settings.value.copy(defaultChunkSize = chunkSize)
     }
 
     fun updateLastVoice(voiceName: String) {
-        prefs.edit().putString("last_voice", voiceName).apply()
+        prefs.edit().putString("last_voice", voiceName).commit()
         _settings.value = _settings.value.copy(lastSelectedVoice = voiceName)
     }
 
     fun updateStorageFolder(folder: String) {
-        prefs.edit().putString("default_storage_folder", folder).apply()
-        _settings.value = _settings.value.copy(defaultStorageFolder = folder)
+        val clean = folder.trim().ifBlank { "TTS" }
+        prefs.edit().putString("default_storage_folder", clean).commit()
+        _settings.value = _settings.value.copy(defaultStorageFolder = clean)
     }
 
     fun updateSpeechRate(rate: Float) {
-        prefs.edit().putFloat("speech_rate", rate).apply()
+        prefs.edit().putFloat("speech_rate", rate).commit()
         _settings.value = _settings.value.copy(speechRate = rate)
     }
 
@@ -102,7 +117,7 @@ class UserPreferences(context: Context) {
     }
 
     fun setSeededInitialProject(seeded: Boolean) {
-        prefs.edit().putBoolean("has_seeded_initial_project", seeded).apply()
+        prefs.edit().putBoolean("has_seeded_initial_project", seeded).commit()
     }
 
     fun getLastActiveProjectId(): Long {
@@ -110,12 +125,12 @@ class UserPreferences(context: Context) {
     }
 
     fun setLastActiveProjectId(id: Long) {
-        prefs.edit().putLong("last_active_project_id", id).apply()
+        prefs.edit().putLong("last_active_project_id", id).commit()
     }
 
     fun resetToDefaults() {
         val seeded = hasSeededInitialProject()
-        prefs.edit().clear().apply()
+        prefs.edit().clear().commit()
         setSeededInitialProject(seeded)
         _settings.value = AppSettings()
     }
