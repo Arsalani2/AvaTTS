@@ -1,11 +1,11 @@
 name: Android CI
 
 on:
-  workflow_dispatch:   # فقط دستی
-  # push:
-  #   branches: [ main, master ]
-  # pull_request:
-  #   branches: [ main, master ]
+  push:
+    branches: [ "main", "master", "develop" ]
+  pull_request:
+    branches: [ "main", "master", "develop" ]
+
 jobs:
   build:
     name: Build & Run Unit Tests
