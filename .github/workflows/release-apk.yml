@@ -41,6 +41,12 @@ jobs:
         run: |
           echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 --decode > "${{ github.workspace }}/release-key.jks"
 
+      - name: Setup Google Services Config
+        run: |
+          if [ -n "${{ secrets.GOOGLE_SERVICES_JSON }}" ]; then
+            echo "${{ secrets.GOOGLE_SERVICES_JSON }}" > app/google-services.json
+          fi
+
       - name: Build Release APK
         env:
           KEYSTORE_FILE: ${{ github.workspace }}/release-key.jks

@@ -32,8 +32,8 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.Segment
 import androidx.compose.material.icons.filled.PieChart
-import androidx.compose.material.icons.filled.Segment
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.material.icons.automirrored.filled.PlaylistAddCheck
@@ -1467,7 +1467,7 @@ fun ProjectProgressChartCard(
                 Column {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Icon(
-                            imageVector = if (isCircularView) Icons.Default.PieChart else Icons.Default.Segment,
+                            imageVector = if (isCircularView) Icons.Default.PieChart else Icons.AutoMirrored.Filled.Segment,
                             contentDescription = null,
                             tint = MaterialTheme.colorScheme.primary,
                             modifier = Modifier.size(20.dp)
@@ -1506,7 +1506,7 @@ fun ProjectProgressChartCard(
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 Icon(
-                                    imageVector = Icons.Default.Segment,
+                                    imageVector = Icons.AutoMirrored.Filled.Segment,
                                     contentDescription = null,
                                     tint = if (!isCircularView) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
                                     modifier = Modifier.size(14.dp)

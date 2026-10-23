@@ -25,6 +25,12 @@ jobs:
     - name: Grant execute permission for gradlew
       run: chmod +x gradlew || true
 
+    - name: Setup Google Services Config
+      run: |
+        if [ -n "${{ secrets.GOOGLE_SERVICES_JSON }}" ]; then
+          echo "${{ secrets.GOOGLE_SERVICES_JSON }}" > app/google-services.json
+        fi
+
     - name: Run Unit Tests
       run: |
         if [ -f "./gradlew" ]; then

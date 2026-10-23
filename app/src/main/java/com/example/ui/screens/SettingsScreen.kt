@@ -45,6 +45,8 @@ import androidx.compose.material.icons.filled.Restore
 import androidx.compose.material.icons.filled.Security
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Badge
+import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -57,14 +59,17 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.RadioButtonDefaults
+import androidx.compose.material3.ScrollableTabRow
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
+import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -86,6 +91,13 @@ import com.example.data.vault.KeyStatus
 import com.example.ui.viewmodel.MainViewModel
 import com.example.util.FileManager
 import kotlinx.coroutines.delay
+
+private data class SettingsTabItem(
+    val title: String,
+    val icon: androidx.compose.ui.graphics.vector.ImageVector,
+    val badgeCount: Int? = null,
+    val testTag: String
+)
 
 @Composable
 fun SettingsScreen(
@@ -145,34 +157,125 @@ fun SettingsScreen(
         }
     }
 
-    LazyColumn(
-        state = listState,
-        modifier = modifier
-            .fillMaxSize()
-            .padding(horizontal = 16.dp),
-        contentPadding = PaddingValues(top = 16.dp, bottom = 140.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp)
+    var selectedTabIndex by rememberSaveable { mutableIntStateOf(0) }
+
+    val settingsTabs = listOf(
+        SettingsTabItem(
+            title = "گاوصندوق کلیدها",
+            icon = Icons.Default.Key,
+            badgeCount = if (keys.isNotEmpty()) keys.size else null,
+            testTag = "tab_vault"
+        ),
+        SettingsTabItem(
+            title = "پوشه ذخیره‌سازی",
+            icon = Icons.Default.Folder,
+            testTag = "tab_storage"
+        ),
+        SettingsTabItem(
+            title = "مدل صوتی گوگل",
+            icon = Icons.Default.AutoAwesome,
+            testTag = "tab_tts_model"
+        ),
+        SettingsTabItem(
+            title = "ظاهر و تم",
+            icon = Icons.Default.Palette,
+            testTag = "tab_theme"
+        ),
+        SettingsTabItem(
+            title = "نگهداری و بازیابی",
+            icon = Icons.Default.Restore,
+            testTag = "tab_maintenance"
+        )
+    )
+
+    Column(
+        modifier = modifier.fillMaxSize()
     ) {
-        item {
-            Column {
-                Text(
-                    text = "تنظیمات برنامه و گاوصندوق",
-                    style = MaterialTheme.typography.titleLarge,
-                    fontWeight = FontWeight.Bold
-                )
-                Text(
-                    text = "مدیریت کلیدهای امنیتی، پوشه ذخیره، مدل صوتی گوگل و تم ظاهری",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 8.dp)
+        ) {
+            Text(
+                text = "تنظیمات برنامه و گاوصندوق",
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.Bold
+            )
+            Spacer(modifier = Modifier.height(2.dp))
+            Text(
+                text = "مدیریت کلیدهای امنیتی، پوشه ذخیره، مدل صوتی گوگل و تم ظاهری",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+
+        ScrollableTabRow(
+            selectedTabIndex = selectedTabIndex,
+            edgePadding = 16.dp,
+            containerColor = MaterialTheme.colorScheme.surface,
+            contentColor = MaterialTheme.colorScheme.primary,
+            modifier = Modifier
+                .fillMaxWidth()
+                .testTag("settings_tab_row")
+        ) {
+            settingsTabs.forEachIndexed { index, tab ->
+                val selected = selectedTabIndex == index
+                Tab(
+                    selected = selected,
+                    onClick = { selectedTabIndex = index },
+                    text = {
+                        Text(
+                            text = tab.title,
+                            fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
+                            fontSize = 13.sp
+                        )
+                    },
+                    icon = {
+                        if (tab.badgeCount != null && tab.badgeCount > 0) {
+                            BadgedBox(
+                                badge = {
+                                    Badge(
+                                        containerColor = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.secondary,
+                                        contentColor = MaterialTheme.colorScheme.onPrimary
+                                    ) {
+                                        Text("${tab.badgeCount}")
+                                    }
+                                }
+                            ) {
+                                Icon(
+                                    imageVector = tab.icon,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                            }
+                        } else {
+                            Icon(
+                                imageVector = tab.icon,
+                                contentDescription = null,
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
+                    },
+                    modifier = Modifier.testTag(tab.testTag)
                 )
             }
         }
 
-        // =========================================================
-        // SECTION 1: VAULT
-        // =========================================================
-        item {
-            SettingsSectionHeader(
+        LazyColumn(
+            state = listState,
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = 16.dp),
+            contentPadding = PaddingValues(top = 16.dp, bottom = 140.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            when (selectedTabIndex) {
+                0 -> {
+                    // =========================================================
+                    // SECTION 1: VAULT
+                    // =========================================================
+                    item {
+                        SettingsSectionHeader(
                 title = "۱. گاوصندوق کلیدهای امنیتی (API Keys)",
                 subtitle = "مدیریت کلیدها، چرخش هوشمند خودکار و وضعیت سهمیه",
                 icon = Icons.Default.Key
@@ -346,12 +449,13 @@ fun SettingsScreen(
                 }
             }
         }
-
-        // =========================================================
-        // SECTION 2: STORAGE DIRECTORY
-        // =========================================================
-        item {
-            SettingsSectionHeader(
+                }
+                1 -> {
+                    // =========================================================
+                    // SECTION 2: STORAGE DIRECTORY
+                    // =========================================================
+                    item {
+                        SettingsSectionHeader(
                 title = "۲. پوشه مقصد و ذخیره‌سازی فایل‌ها",
                 subtitle = "مدیریت مسیر ذخیره فایل‌های صوتی و دسترسی به فایل‌ها",
                 icon = Icons.Default.Folder
@@ -492,12 +596,13 @@ fun SettingsScreen(
                 }
             }
         }
-
-        // =========================================================
-        // SECTION 3: GOOGLE TTS MODEL
-        // =========================================================
-        item {
-            SettingsSectionHeader(
+                }
+                2 -> {
+                    // =========================================================
+                    // SECTION 3: GOOGLE TTS MODEL
+                    // =========================================================
+                    item {
+                        SettingsSectionHeader(
                 title = "۳. هوش مصنوعی و مدل صوتی گوگل",
                 subtitle = "انتخاب مدل Gemini TTS و موتور سنتز صدا",
                 icon = Icons.Default.AutoAwesome
@@ -608,12 +713,13 @@ fun SettingsScreen(
                 }
             }
         }
-
-        // =========================================================
-        // SECTION 4: APPEARANCE & THEME
-        // =========================================================
-        item {
-            SettingsSectionHeader(
+                }
+                3 -> {
+                    // =========================================================
+                    // SECTION 4: APPEARANCE & THEME
+                    // =========================================================
+                    item {
+                        SettingsSectionHeader(
                 title = "۴. ظاهر و قالب برنامه",
                 subtitle = "شخصی‌سازی حالت روز/شب و انتخاب از بین ۵ پالت رنگی مدرن",
                 icon = Icons.Default.Palette
@@ -765,12 +871,13 @@ fun SettingsScreen(
                 }
             }
         }
-
-        // =========================================================
-        // SECTION 5: MAINTENANCE & RESET
-        // =========================================================
-        item {
-            SettingsSectionHeader(
+                }
+                4 -> {
+                    // =========================================================
+                    // SECTION 5: MAINTENANCE & RESET
+                    // =========================================================
+                    item {
+                        SettingsSectionHeader(
                 title = "۵. نگهداری و بازنشانی سامانه",
                 subtitle = "پاکسازی گزارش‌ها و بازیابی تنظیمات کارخانه",
                 icon = Icons.Default.Restore
@@ -817,6 +924,9 @@ fun SettingsScreen(
                     ) {
                         Text("بازنشانی به تنظیمات پیش‌فرض")
                     }
+                }
+            }
+        }
                 }
             }
         }

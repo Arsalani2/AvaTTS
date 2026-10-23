@@ -21,8 +21,8 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.CallMerge
 import androidx.compose.material.icons.filled.Assessment
-import androidx.compose.material.icons.filled.CallMerge
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.CloudDownload
 import androidx.compose.material.icons.filled.DeleteSweep
@@ -490,7 +490,7 @@ private fun resolveLogStatus(log: ConversionLogEntity): Triple<String, Color, Im
         "DOWNLOAD" -> Triple("دانلود گوگل", Color(0xFF0284C7), Icons.Default.CloudDownload)
         "SAVED" -> Triple("ذخیره فایل", Color(0xFF10B981), Icons.Default.Save)
         "SUCCESS" -> Triple("انجام شد", Color(0xFF10B981), Icons.Default.CheckCircle)
-        "MERGED" -> Triple("ادغام فایل‌ها", Color(0xFF8B5CF6), Icons.Default.CallMerge)
+        "MERGED" -> Triple("ادغام فایل‌ها", Color(0xFF8B5CF6), Icons.AutoMirrored.Filled.CallMerge)
         "RATE_LIMIT_429" -> Triple("محدودیت (429)", Color(0xFFF59E0B), Icons.Default.HourglassTop)
         "INFO", "CREATED", "RENAMED" -> Triple("رویداد پروژه", Color(0xFF3B82F6), Icons.Default.Info)
         else -> Triple("خطا (${log.httpCode})", Color(0xFFEF4444), Icons.Default.ErrorOutline)

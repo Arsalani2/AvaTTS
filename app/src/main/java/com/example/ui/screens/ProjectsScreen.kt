@@ -19,8 +19,8 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.automirrored.filled.CallMerge
 import androidx.compose.material.icons.filled.Audiotrack
-import androidx.compose.material.icons.filled.CallMerge
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Delete
@@ -212,7 +212,7 @@ fun ProjectsScreen(
             title = {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Icon(
-                        imageVector = Icons.Default.CallMerge,
+                        imageVector = Icons.AutoMirrored.Filled.CallMerge,
                         contentDescription = null,
                         tint = MaterialTheme.colorScheme.primary
                     )
@@ -625,7 +625,7 @@ fun ProjectCardItem(
                         modifier = Modifier.height(34.dp).testTag("btn_merge_wav_${project.id}")
                     ) {
                         Icon(
-                            imageVector = Icons.Default.CallMerge,
+                            imageVector = Icons.AutoMirrored.Filled.CallMerge,
                             contentDescription = null,
                             modifier = Modifier.size(15.dp)
                         )
