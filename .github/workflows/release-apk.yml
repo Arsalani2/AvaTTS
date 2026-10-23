@@ -27,7 +27,7 @@ jobs:
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v3
         with:
-          gradle-version: '8.7'
+          gradle-version: '9.3.1'
 
       - name: Cache Gradle Packages
         uses: actions/cache@v4
@@ -35,22 +35,9 @@ jobs:
           path: |
             ~/.gradle/caches
             ~/.gradle/wrapper
-          key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
+          key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/*.gradle.kts', 'gradle/libs.versions.toml', 'gradle/wrapper/gradle-wrapper.properties') }}
           restore-keys: |
             ${{ runner.os }}-gradle-
-
-      - name: Make Gradlew Executable
-        run: chmod +x ./gradlew 2>/dev/null || echo "gradlew not found, will use system gradle or bootstrap"
-
-      - name: Bootstrap Gradle Wrapper
-        run: |
-          if [ ! -f "./gradlew" ]; then
-            echo "gradlew not found in repo, bootstrapping wrapper with Gradle 8.7..."
-            gradle wrapper --gradle-version 8.7
-            chmod +x ./gradlew
-          else
-            chmod +x ./gradlew
-          fi
 
       - name: Decode Keystore from Secret
         run: |
@@ -74,11 +61,7 @@ jobs:
           KEY_ALIAS: ${{ secrets.KEY_ALIAS || 'AvaTTS' }}
           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
         run: |
-          if [ -f "./gradlew" ]; then
-            ./gradlew assembleRelease --stacktrace
-          else
-            gradle assembleRelease --stacktrace
-          fi
+          gradle assembleRelease --stacktrace
 
       - name: Upload APK to GitHub Release
         uses: softprops/action-gh-release@v2
