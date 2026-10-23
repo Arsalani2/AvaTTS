@@ -1,0 +1,198 @@
+package com.example.service.tts
+
+import android.util.Base64
+import com.example.util.WavAudioUtil
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.OkHttpClient
+import okhttp3.Request
+import okhttp3.RequestBody.Companion.toRequestBody
+import org.json.JSONArray
+import org.json.JSONObject
+import java.io.IOException
+import java.util.concurrent.TimeUnit
+
+sealed class TtsException(message: String, val httpCode: Int = 0) : Exception(message)
+class TtsQuotaExceededException(message: String) : TtsException(message, 429)
+class TtsInvalidKeyException(message: String) : TtsException(message, 403)
+class TtsNetworkException(message: String) : TtsException(message, 0)
+class TtsGeneralException(message: String, code: Int = 500) : TtsException(message, code)
+
+class GeminiTtsService {
+
+    private val client: OkHttpClient = OkHttpClient.Builder()
+        .connectTimeout(60, TimeUnit.SECONDS)
+        .readTimeout(60, TimeUnit.SECONDS)
+        .writeTimeout(60, TimeUnit.SECONDS)
+        .build()
+
+    private val jsonMediaType = "application/json; charset=utf-8".toMediaType()
+
+    // Model list in priority order: official Gemini TTS models with graceful fallback
+    private val candidateModels = listOf(
+        "gemini-2.5-flash-preview-tts",
+        "gemini-3.8-flash-tts",
+        "gemini-3.5-flash"
+    )
+
+    /**
+     * Synthesizes audio for given text and voice name using the provided API key.
+     * Optionally accepts custom modelName entered by the user.
+     * Throws specific TtsException for failover handling.
+     */
+    suspend fun synthesizeSpeech(
+        apiKey: String,
+        text: String,
+        voiceName: String = "Kore",
+        modelName: String? = null
+    ): ByteArray = withContext(Dispatchers.IO) {
+        val trimmedKey = apiKey.trim()
+        if (trimmedKey.isEmpty()) {
+            throw TtsInvalidKeyException("کلید API وارد نشده یا خالی است.")
+        }
+
+        var lastException: Exception? = null
+
+        val requestedModel = modelName?.trim()?.takeIf { it.isNotBlank() } ?: "gemini-2.5-flash-preview-tts"
+        val modelsToTry = if (requestedModel in candidateModels) {
+            listOf(requestedModel) + candidateModels.filter { it != requestedModel }
+        } else {
+            listOf(requestedModel) + candidateModels
+        }
+
+        // Try models starting with user-selected model
+        for (model in modelsToTry) {
+            try {
+                return@withContext executeSynthesis(trimmedKey, model, text, voiceName)
+            } catch (e: TtsQuotaExceededException) {
+                // Rate limit applies to the key, do not try other models with same key
+                throw e
+            } catch (e: TtsInvalidKeyException) {
+                // Invalid key applies to the key
+                throw e
+            } catch (e: TtsGeneralException) {
+                // If 400 (unsupported config/model) or 404 (model not found), try fallback model
+                if (e.httpCode == 400 || e.httpCode == 404) {
+                    lastException = e
+                    continue
+                } else {
+                    throw e
+                }
+            } catch (e: Exception) {
+                lastException = e
+            }
+        }
+
+        throw lastException ?: TtsGeneralException("خطا در ارتباط با سرویس صوتی گوگل")
+    }
+
+    private fun executeSynthesis(
+        apiKey: String,
+        modelName: String,
+        text: String,
+        voiceName: String
+    ): ByteArray {
+        val url = "https://generativelanguage.googleapis.com/v1beta/models/$modelName:generateContent?key=$apiKey"
+
+        val requestPayload = JSONObject().apply {
+            val contents = JSONArray().apply {
+                val contentObj = JSONObject().apply {
+                    val parts = JSONArray().apply {
+                        val partObj = JSONObject().apply {
+                            put("text", text)
+                        }
+                        put(partObj)
+                    }
+                    put("parts", parts)
+                }
+                put(contentObj)
+            }
+            put("contents", contents)
+
+            val generationConfig = JSONObject().apply {
+                put("responseModalities", JSONArray().apply { put("AUDIO") })
+                put("speechConfig", JSONObject().apply {
+                    put("voiceConfig", JSONObject().apply {
+                        put("prebuiltVoiceConfig", JSONObject().apply {
+                            put("voiceName", voiceName)
+                        })
+                    })
+                })
+            }
+            put("generationConfig", generationConfig)
+        }
+
+        val requestBody = requestPayload.toString().toRequestBody(jsonMediaType)
+        val request = Request.Builder()
+            .url(url)
+            .post(requestBody)
+            .header("Content-Type", "application/json")
+            .build()
+
+        val (responseBody, code, isSuccessful) = try {
+            client.newCall(request).execute().use { response ->
+                Triple(response.body?.string().orEmpty(), response.code, response.isSuccessful)
+            }
+        } catch (e: IOException) {
+            throw TtsNetworkException("خطای اتصال شبکه: لطفاً اینترنت خود را بررسی کنید. (${e.message})")
+        }
+
+        if (!isSuccessful) {
+            if (code == 429 || responseBody.contains("RESOURCE_EXHAUSTED", ignoreCase = true)) {
+                throw TtsQuotaExceededException("محدودیت سهمیه مصرف کلید (کد 429). کلید در حال خنک‌سازی...")
+            }
+            if (code == 400 || code == 403) {
+                if (responseBody.contains("API_KEY_INVALID", ignoreCase = true) ||
+                    responseBody.contains("API key not valid", ignoreCase = true) ||
+                    responseBody.contains("API_KEY_SERVICE_BLOCKED", ignoreCase = true)
+                ) {
+                    throw TtsInvalidKeyException("کلید API نامعتبر است یا دسترسی مجاز ندارد (کد $code).")
+                }
+            }
+            throw TtsGeneralException("خطای پاسخ سرور گوگل ($code): ${parseErrorMessage(responseBody)}", code)
+        }
+
+        // Parse JSON response
+        try {
+            val json = JSONObject(responseBody)
+            val candidates = json.optJSONArray("candidates")
+            if (candidates == null || candidates.length() == 0) {
+                throw TtsGeneralException("پاسخ صوتی از مدل دریافت نشد.")
+            }
+            val firstCandidate = candidates.getJSONObject(0)
+            val content = firstCandidate.getJSONObject("content")
+            val parts = content.getJSONArray("parts")
+            var base64Data: String? = null
+
+            for (i in 0 until parts.length()) {
+                val part = parts.getJSONObject(i)
+                val inlineData = part.optJSONObject("inlineData")
+                if (inlineData != null) {
+                    base64Data = inlineData.optString("data")
+                    if (!base64Data.isNullOrBlank()) break
+                }
+            }
+
+            if (base64Data.isNullOrBlank()) {
+                throw TtsGeneralException("داده صوتی در پاسخ سرور یافت نشد.")
+            }
+
+            val rawBytes = Base64.decode(base64Data, Base64.DEFAULT)
+            return WavAudioUtil.ensureWavFormat(rawBytes)
+        } catch (e: Exception) {
+            if (e is TtsException) throw e
+            throw TtsGeneralException("خطا در پردازش فایل صوتی: ${e.message}")
+        }
+    }
+
+    private fun parseErrorMessage(jsonBody: String): String {
+        return try {
+            val obj = JSONObject(jsonBody)
+            val error = obj.optJSONObject("error")
+            error?.optString("message") ?: jsonBody.take(120)
+        } catch (e: Exception) {
+            jsonBody.take(120)
+        }
+    }
+}

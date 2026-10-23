@@ -1,0 +1,8 @@
+<resources>
+    <string name="app_name">AvaTTS</string>
+    <string name="title_projects">پروژه‌ها</string>
+    <string name="title_studio">استودیو ساخت</string>
+    <string name="title_vault">گاوصندوق کلیدها</string>
+    <string name="title_logs">گزارش‌ها</string>
+    <string name="title_settings">تنظیمات</string>
+</resources>

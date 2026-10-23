@@ -1,0 +1,8 @@
+{
+  "name": "Remix AvaTTS fix bug",
+  "description": "استودیو هوشمند تبدیل متن به گفتار با گاوصندوق کلیدهای API، بخش‌بندی متن و مدیریت پروژه",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
