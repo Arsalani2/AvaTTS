@@ -1,0 +1,53 @@
+=====================================================
+PROJECT_HANDOFF.txt — پروژه AvaTTS
+=====================================================
+
+## ۱. معرفی پروژه
+- اپلیکیشن اندروید (Kotlin + Jetpack Compose) با نام AvaTTS
+- ساختار: ماژول :app ، فایل‌های build.gradle.kts ، gradle/libs.versions.toml
+- نسخه‌ها (طبق gradle/libs.versions.toml): agp = 9.1.1 ، kotlin = 2.2.10 ، ksp = 2.3.5
+- طبق gradle/wrapper/gradle-wrapper.properties نسخه Gradle مورد نیاز: 9.3.1
+- ساخت APK ریلیز از طریق GitHub Actions: .github/workflows/release-apk.yml
+  (با push تگ v* یا اجرای دستی workflow_dispatch)
+
+## ۲. سابقه تغییرات
+
+### [2026-10-23] (ساعت و منطقه زمانی در دسترس نبود)
+- مدل/ایجنت: Claude Sonnet 5.5 (Claude Code)
+- اقدام: بررسی علت خطای ساخت APK در بخش Release گیتهاب و اصلاح workflow
+- فایل‌های بررسی‌شده: .github/workflows/release-apk.yml ، gradle/wrapper/gradle-wrapper.properties ،
+  gradle/libs.versions.toml ، app/build.gradle.kts ، settings.gradle.kts ، gradle.properties ، .gitignore
+- فایل تغییر داده‌شده: .github/workflows/release-apk.yml
+
+#### علت پیدا شده (تحلیل از روی کد؛ لاگ واقعی اجرای ناموفق گیتهاب بررسی نشد)
+1. workflow نسخه Gradle را روی 8.7 قفل کرده بود (gradle-version: '8.7') در حالی که پروژه از
+   AGP 9.1.1 استفاده می‌کند و gradle-wrapper.properties نسخه 9.3.1 را می‌خواهد. AGP 9.x با Gradle 8.7 کار نمی‌کند.
+2. فایل‌های gradlew و gradle/wrapper/gradle-wrapper.jar در ریپو commit نشده‌اند (فقط gradle-wrapper.properties هست).
+   مرحله «Bootstrap Gradle Wrapper» با دستور `gradle wrapper --gradle-version 8.7` سعی می‌کرد wrapper بسازد؛
+   این کار هم پروژه را با Gradle 8.7 configure می‌کند (خطا می‌دهد) و هم نسخه wrapper را به 8.7 برمی‌گرداند.
+
+#### اصلاح انجام‌شده
+- gradle-version از '8.7' به '9.3.1' تغییر کرد.
+- مراحل «Make Gradlew Executable» و «Bootstrap Gradle Wrapper» حذف شدند.
+- مرحله ساخت مستقیم با `gradle assembleRelease --stacktrace` اجرا می‌شود.
+- کلید cache شامل *.gradle.kts و libs.versions.toml شد.
+
+#### وضعیت تأیید
+- تأیید‌نشده: ساخت واقعی در GitHub Actions هنوز اجرا نشده است (Android SDK در محیط محلی نبود).
+- تلاش ناموفق: ساخت wrapper با `gradle wrapper --gradle-version 9.3.1` در محیط محلی شکست خورد
+  (احتمالاً به‌خاطر محدودیت شبکه/پراکسی)؛ خطای دقیق ثبت نشد. gradlew به ریپو اضافه نشد.
+
+## ۳. نکات و ریسک‌های شناخته‌شده
+- مرحله Decode Keystore اگر secret با نام KEYSTORE_BASE64 خالی باشد عمداً خطا می‌دهد.
+- برای امضای APK این secretها باید در Settings → Secrets تنظیم شوند:
+  KEYSTORE_BASE64 ، KEYSTORE_PASSWORD ، KEY_PASSWORD (و اختیاری KEY_ALIAS که پیش‌فرض AvaTTS است).
+- اگر امضا کامل نباشد، ممکن است APK بدون امضا (unsigned) تولید شود یا ساخت خطا دهد.
+- compileSdk روی API 36.1 است؛ ممکن است دانلود SDK در runner زمان ببرد.
+- android.yml.disabled غیرفعال است و بررسی نشد.
+
+## ۴. وضعیت فعلی و قدم بعدی
+- آخرین عملیات موفق: اصلاح فایل workflow (commit/push در ادامه انجام می‌شود).
+- قدم بعدی: اجرای دستی workflow «Build & Release APK» (Actions → Run workflow) یا push تگ جدید مثل v1.0.1،
+  و بررسی لاگ. اگر خطای جدیدی آمد، متن کامل خطا را در همین فایل ثبت کنید.
+- پیشنهاد: ساخت و commit کردن gradlew و gradle/wrapper/gradle-wrapper.jar روی سیستم خودتان
+  با دستور `gradle wrapper --gradle-version 9.3.1`.
