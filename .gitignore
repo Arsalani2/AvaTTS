@@ -51,6 +51,7 @@ Thumbs.db
 *.keystore
 debug.keystore
 release-key.jks
+AvaTTS.jks
 keystore.base64.txt
 
 # AI Studio

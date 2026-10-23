@@ -25,9 +25,9 @@ android {
   signingConfigs {
     create("release") {
       val keystoreFileEnv = System.getenv("KEYSTORE_FILE") ?: System.getenv("KEYSTORE_PATH")
-      val keystorePath = if (!keystoreFileEnv.isNullOrBlank()) keystoreFileEnv else "${rootDir}/release-key.jks"
+      val keystorePath = if (!keystoreFileEnv.isNullOrBlank()) keystoreFileEnv else "${rootDir}/AvaTTS.jks"
       val storePasswordEnv = System.getenv("KEYSTORE_PASSWORD") ?: System.getenv("STORE_PASSWORD")
-      val keyAliasEnv = System.getenv("KEY_ALIAS") ?: "upload"
+      val keyAliasEnv = System.getenv("KEY_ALIAS") ?: "AvaTTS"
       val keyPasswordEnv = System.getenv("KEY_PASSWORD")
 
       val targetKeyFile = file(keystorePath)
