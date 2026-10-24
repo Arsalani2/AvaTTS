@@ -51,3 +51,24 @@ PROJECT_HANDOFF.txt — پروژه AvaTTS
   و بررسی لاگ. اگر خطای جدیدی آمد، متن کامل خطا را در همین فایل ثبت کنید.
 - پیشنهاد: ساخت و commit کردن gradlew و gradle/wrapper/gradle-wrapper.jar روی سیستم خودتان
   با دستور `gradle wrapper --gradle-version 9.3.1`.
+
+### [2026-10-24 06:11 UTC] بررسی اتصال گیتهاب و علت نیامدن APK در Release
+- مدل/ایجنت: Claude Sonnet 5.5 (Claude Code)
+- اقدام: بررسی اتصال گیتهاب و وضعیت واقعی Actions/Releases با `gh api` (REST)
+- نتایج تأییدشده (از API گیتهاب):
+  - ریپو Arsalani2/AvaTTS قابل دسترسی است (public، دسترسی push دارد).
+  - تنها اجرای workflow: id=40067739776 ، رویداد workflow_dispatch روی main ، نتیجه success.
+    در این اجرا مرحله «Build Release APK» موفق بود ولی «Upload APK to GitHub Release» = skipped
+    (چون شرط `if: startsWith(github.ref, 'refs/tags/v')` روی main برقرار نیست).
+  - هیچ artifact ای برای آن اجرا ثبت نشده بود.
+  - Release موجود: v1.0.0 (prerelease، بدون هیچ asset). تگ v1.0.0 به کامیت قدیمی e93ead1 اشاره می‌کند (قبل از اصلاح workflow).
+- علت اصلی: ساخت موفق است ولی آپلود به Release فقط با push تگ اجرا می‌شد، نه با اجرای دستی.
+- اصلاح (branch: fix/release-upload-on-dispatch) در .github/workflows/release-apk.yml:
+  - اضافه شدن input به نام tag برای workflow_dispatch (پیش‌فرض v1.0.1).
+  - حذف شرط `if` و استفاده از tag_name (تگ push شده یا مقدار input).
+  - اضافه شدن مرحله upload-artifact (APK همیشه در Artifacts اجرا هم می‌ماند).
+  - fail_on_unmatched_files: true تا اگر APK پیدا نشد خطای واضح بدهد.
+- وضعیت تأیید: تأییدنشده — workflow اصلاح‌شده هنوز روی گیتهاب اجرا نشده است.
+- ناشناخته: نام دقیق فایل APK خروجی (signed یا unsigned) بررسی نشد؛ لاگ کامل اجرا خوانده نشد.
+- قدم بعدی: merge کردن PR، سپس Actions → Build & Release APK → Run workflow با tag=v1.0.1
+  (یا push تگ جدید v1.0.1 روی main). بعد از آن Release را بررسی کنید.
