@@ -510,6 +510,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             showSnackbar("فایل صوتی برای این بخش هنوز تولید نشده است.")
             return
         }
+        // BUG-34: قبل از فراخوانی پلیر، وجود واقعی فایل چک شود — فایل گم‌شده نباید «دکمهٔ بی‌عمل» باشد
+        if (!File(path).exists() || !File(path).isFile) {
+            showSnackbar("فایل صوتی این بخش روی حافظه یافت نشد (شاید حذف شده باشد)؛ لطفاً این بخش را دوباره تبدیل کنید.")
+            return
+        }
         playerManager.playOrPause(path, chunk.id)
     }
 
@@ -527,6 +532,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun closePlayer() {
         playerManager.stop()
+    }
+
+    // BUG-34: پاک‌کردن خطای پلیر بعد از نمایش به کاربر
+    fun clearPlayerError() {
+        playerManager.clearError()
     }
 
     // Vault Actions

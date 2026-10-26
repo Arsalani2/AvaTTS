@@ -143,6 +143,14 @@ class MainActivity : ComponentActivity() {
                 }
             }
 
+            // BUG-34: خطاهای پخش‌کننده (مثل فایل گم‌شده) هرگز بی‌پیام نمی‌مانند
+            LaunchedEffect(playerState.error) {
+                playerState.error?.let {
+                    snackbarHostState.showSnackbar(it)
+                    viewModel.clearPlayerError()
+                }
+            }
+
             // Provide RTL layout for Persian language support
             CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
                 AvaTtsTheme(

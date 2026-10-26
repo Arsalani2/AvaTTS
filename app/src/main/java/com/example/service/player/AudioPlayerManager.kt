@@ -139,6 +139,13 @@ class AudioPlayerManager(private val context: Context) {
         _playerState.value = PlayerState()
     }
 
+    /** BUG-34: پاک‌کردن state خطا بعد از اینکه به کاربر نمایش داده شد */
+    fun clearError() {
+        if (_playerState.value.error != null) {
+            _playerState.value = _playerState.value.copy(error = null)
+        }
+    }
+
     private fun startTicker() {
         stopTicker()
         progressTickerJob = scope.launch {
