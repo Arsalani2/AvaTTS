@@ -53,7 +53,14 @@ class TtsQueueEngine(
         onChunkCompleted: ((Long) -> Unit)? = null
     ) {
         if (chunkIds.isEmpty()) return
-        queueJob?.cancel()
+        // BUG-05: استارت دوباره در حین اجرای صف رد می‌شود — قبلاً queueJob?.cancel()
+        // بی‌صدا کارِ قبل را می‌کشت، بخشِ PROCESSING همان‌طور گیر می‌کرد و هیچ پیامی هم نمی‌داد
+        if (_queueState.value.isRunning) {
+            _queueState.value = _queueState.value.copy(
+                currentStatusMessage = "صف دیگری در حال اجراست؛ ابتدا صف جاری را متوقف کنید."
+            )
+            return
+        }
 
         queueJob = scope.launch {
             _queueState.value = QueueState(
@@ -565,7 +572,9 @@ class TtsQueueEngine(
     }
 
     fun cancelQueue() {
-        val currentActiveId = _queueState.value.activeChunkId
+        // BUG-05: بخش فعال PROCESSING پیش از پاک‌شدن state به PENDING برمی‌گردد
+        // (منطق مشترک با بقیهٔ مسیرهای لغو — دیگه چیزی گیر نمی‌کند)
+        resetActiveChunk()
         queueJob?.cancel()
         // BUG-16: درخواست HTTP در جریان هم فوراً لغو می‌شود، نه فقط بعد از پایانش
         ttsService.cancelActiveRequest()
@@ -575,20 +584,23 @@ class TtsQueueEngine(
             activeChunkId = null,
             currentStatusMessage = "پردازش صف متوقف شد."
         )
-        if (currentActiveId != null) {
-            scope.launch {
-                val current = chunkDao.getChunkById(currentActiveId)
-                if (current?.status == ChunkEntity.STATUS_PROCESSING) {
-                    repository.updateChunkStatus(
-                        chunkId = currentActiveId,
-                        status = ChunkEntity.STATUS_PENDING,
-                        audioPath = null,
-                        keyUsedMasked = null,
-                        keyUsedName = null,
-                        durationMs = 0L,
-                        error = null
-                    )
-                }
+    }
+
+    // BUG-05: بخش فعال صف اگر در وضعیت PROCESSING گیر کرده باشد به PENDING برمی‌گردد
+    private fun resetActiveChunk() {
+        val currentActiveId = _queueState.value.activeChunkId ?: return
+        scope.launch {
+            val current = chunkDao.getChunkById(currentActiveId)
+            if (current?.status == ChunkEntity.STATUS_PROCESSING) {
+                repository.updateChunkStatus(
+                    chunkId = currentActiveId,
+                    status = ChunkEntity.STATUS_PENDING,
+                    audioPath = null,
+                    keyUsedMasked = null,
+                    keyUsedName = null,
+                    durationMs = 0L,
+                    error = null
+                )
             }
         }
     }
