@@ -230,13 +230,14 @@ class TtsQueueService : Service() {
         }
 
         fun stop(context: Context) {
-            val intent = Intent(context, TtsQueueService::class.java).apply {
-                action = ACTION_STOP
-            }
+            // BUG-02: stopService از پس‌زمینه مجاز است — startService با ACTION_STOP در اندروید ۸+
+            // وقتی اپ پس‌زمینه است IllegalStateException می‌داد (بلعیده می‌شد) و اعلان ongoing
+            // «در حال پردازش» تا هارد‌ری‌استارت باقی می‌ماند.
             try {
-                context.startService(intent)
+                context.stopService(Intent(context, TtsQueueService::class.java))
+                android.util.Log.w("TtsQueueService", "Queue service stop requested")
             } catch (e: Exception) {
-                e.printStackTrace()
+                android.util.Log.w("TtsQueueService", "Failed to stop queue service", e)
             }
         }
 
