@@ -326,6 +326,8 @@ class TtsQueueEngine(
                         fileSize = outputFile.length()
                     )
                 } else {
+                    // BUG-31: صدا از گوگل ساخته شد ولی ذخیره فایل شکست خورد — چانک هرگز COMPLETED نمی‌شود؛
+                    // کلید سالم بود، پس نه recordError و نه recordSuccess (جریمه کلید اشتباه است).
                     repository.logConversion(
                         projectId = project.id,
                         projectName = project.name,
@@ -335,8 +337,18 @@ class TtsQueueEngine(
                         status = "ERROR",
                         httpCode = 500,
                         latencyMs = 0L,
-                        message = "بخش ${chunk.chunkIndex} در مسیر ${outputFile.absolutePath} ذخیره نشد (خطای حافظه)"
+                        message = "بخش ${chunk.chunkIndex} در مسیر ${outputFile.absolutePath} ذخیره نشد (خطای حافظه). تولید صدا موفق بود ولی نوشتن فایل شکست خورد — حافظه پر است؟"
                     )
+                    repository.updateChunkStatus(
+                        chunkId = chunk.id,
+                        status = ChunkEntity.STATUS_FAILED,
+                        audioPath = null,
+                        keyUsedMasked = candidateKey.maskedKey,
+                        keyUsedName = candidateKey.name,
+                        durationMs = latency,
+                        error = "تولید صدا موفق بود اما ذخیره فایل روی حافظه شکست خورد (حافظه پر است؟)"
+                    )
+                    return false
                 }
 
                 // Update key metrics
