@@ -579,6 +579,23 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 return@launch
             }
 
+            val missingChunks = completedChunks.filter { chunk ->
+                val path = chunk.audioFilePath
+                path.isNullOrBlank() || !File(path).exists() || !File(path).isFile || File(path).length() <= 44
+            }
+            if (missingChunks.isNotEmpty()) {
+                // BUG-33: merge ناقص بدتر از عدم merge است — به‌جای حذف بی‌صدای فصل‌های گم‌شده،
+                // دقیقاً بگوییم کدام بخش‌ها فایل صوتی ندارند تا دوباره تبدیل شوند.
+                val missingIndices = missingChunks.map { it.chunkIndex }
+                val shown = if (missingIndices.size > 10) {
+                    missingIndices.take(10).joinToString("، ") + " و ${missingIndices.size - 10} مورد دیگر"
+                } else {
+                    missingIndices.joinToString("، ")
+                }
+                showSnackbar("ادغام متوقف شد: بخش‌های $shown فایل صوتی ندارند. ابتدا آن‌ها را دوباره تبدیل کنید.")
+                return@launch
+            }
+
             val audioFiles = completedChunks.mapNotNull { chunk ->
                 val path = chunk.audioFilePath
                 if (!path.isNullOrBlank()) {
