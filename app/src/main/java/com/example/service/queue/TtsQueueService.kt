@@ -51,6 +51,9 @@ class TtsQueueService : Service() {
                 startForeground(NOTIFICATION_ID_FOREGROUND, notification)
             }
             ACTION_STOP -> {
+                // BUG-01: «توقف صف» از اعلان، صف واقعی را هم متوقف می‌کند (یکی از سه مسیر مجاز لغو)؛
+                // پایان طبیعی صف هم از همین مسیر سرویس را خاموش می‌کند
+                QueueEngineHolder.peek()?.cancelQueue()
                 stopForeground(STOP_FOREGROUND_REMOVE)
                 stopSelf()
             }
@@ -146,6 +149,18 @@ class TtsQueueService : Service() {
             .setOnlyAlertOnce(true)
             .setCategory(NotificationCompat.CATEGORY_PROGRESS)
             .setPriority(NotificationCompat.PRIORITY_LOW)
+
+        // BUG-01: دکمهٔ «توقف صف» در اعلان — لغو صف بدون باز کردن اپ (اکشن ACTION_STOP)
+        val stopIntent = Intent(this, TtsQueueService::class.java).apply {
+            action = ACTION_STOP
+        }
+        val stopPendingIntent = PendingIntent.getService(
+            this,
+            1,
+            stopIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+        builder.addAction(android.R.drawable.ic_media_pause, "توقف صف", stopPendingIntent)
 
         if (totalChunks > 0 && cooldownSec <= 0) {
             builder.setProgress(totalChunks, completedChunks, false)

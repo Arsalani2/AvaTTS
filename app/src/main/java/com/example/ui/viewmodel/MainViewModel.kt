@@ -17,6 +17,7 @@ import com.example.data.vault.ApiKeyVaultManager
 import com.example.service.player.AudioPlayerManager
 import com.example.service.player.PlayerState
 import com.example.service.queue.QueueState
+import com.example.service.queue.QueueEngineHolder
 import com.example.service.queue.TtsQueueEngine
 import com.example.service.tts.GeminiTtsService
 import com.example.service.tts.TtsNetworkException
@@ -41,21 +42,15 @@ import java.io.File
 class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     private val db = AppDatabase.getInstance(application)
+    // BUG-01: نمونه‌های stateful (گاوصندوق، تنظیمات، صف) از holder سطح اپ می‌آیند تا
+    // با بستن اپ/بازسازی ViewModel نمونهٔ دوم نسازند و پردازش پس‌زمینه زنده بماند
     val repository = AppRepository(db.projectDao(), db.chunkDao(), db.conversionLogDao())
-    val vaultManager = ApiKeyVaultManager(application)
-    val userPreferences = UserPreferences(application)
+    val vaultManager = QueueEngineHolder.vaultManager(application)
+    val userPreferences = QueueEngineHolder.userPreferences(application)
     val fileManager = FileManager(application, userPreferences)
     val ttsService = GeminiTtsService()
     val playerManager = AudioPlayerManager(application)
-    val queueEngine = TtsQueueEngine(
-        context = application,
-        repository = repository,
-        chunkDao = db.chunkDao(),
-        vaultManager = vaultManager,
-        ttsService = ttsService,
-        fileManager = fileManager,
-        userPreferences = userPreferences
-    )
+    val queueEngine = QueueEngineHolder.engine(application)
 
     // Observables
     val projects: StateFlow<List<ProjectEntity>> = repository.allProjects
@@ -755,6 +750,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     override fun onCleared() {
         super.onCleared()
         playerManager.release()
-        queueEngine.cancelQueue()
+        // BUG-01: صف دیگر به چرخهٔ حیات ViewModel گره ندارد — cancelQueue حذف شد.
+        // لغو فقط از: دکمهٔ توقف کاربر، اکشن «توقف صف» اعلان سرویس، یا پایان طبیعی صف.
     }
 }

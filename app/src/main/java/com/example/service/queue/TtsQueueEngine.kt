@@ -40,7 +40,8 @@ class TtsQueueEngine(
     private val fileManager: FileManager,
     private val userPreferences: UserPreferences
 ) {
-    private val scope = CoroutineScope(Dispatchers.IO + Job())
+    // BUG-01: scope صف مستقل از چرخهٔ حیات ViewModel/Activity — SupervisorJob تا شکست یک چانک بقیه را نکشد
+    private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
     private var queueJob: Job? = null
 
     private val _queueState = MutableStateFlow(QueueState())
