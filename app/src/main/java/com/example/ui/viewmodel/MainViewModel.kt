@@ -19,6 +19,7 @@ import com.example.service.player.PlayerState
 import com.example.service.queue.QueueState
 import com.example.service.queue.TtsQueueEngine
 import com.example.service.tts.GeminiTtsService
+import com.example.service.tts.TtsNetworkException
 import com.example.util.FileManager
 import com.example.util.SmartTextChunker
 import com.example.util.WavAudioUtil
@@ -682,6 +683,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 ttsService.synthesizeSpeech(key, "تست اتصال کلید", "Kore")
                 vaultManager.recordSuccess(id)
                 showSnackbar("اتصال به سرویس صوتی گوگل موفقیت‌آمیز بود.")
+            } catch (e: TtsNetworkException) {
+                // BUG-03: خطای شبکه جریمهٔ کلید نیست — آمار کلید دست‌نخورده می‌ماند
+                showSnackbar("ارتباط شبکه برقرار نیست؛ اینترنت خود را بررسی کنید. (کلید شما جریمه نشد)")
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
             } catch (e: Exception) {
                 vaultManager.recordError(id, isQuotaLimit = e.message?.contains("429") == true)
                 showSnackbar("خطا در تست کلید: ${e.message}")

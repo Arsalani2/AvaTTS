@@ -79,6 +79,12 @@ class GeminiTtsService {
                 } else {
                     throw e
                 }
+            } catch (e: TtsNetworkException) {
+                // BUG-32: خطای شبکه ربطی به مدل ندارد — زنجیرهٔ fallback نباید ۳ برابر درخواست بسوزاند
+                throw e
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                // لغو کوروتین (توقف صف) هرگز نباید بلعیده شود
+                throw e
             } catch (e: Exception) {
                 lastException = e
             }
