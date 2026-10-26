@@ -733,9 +733,15 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun updateTtsModel(modelName: String) {
-        val trimmed = modelName.trim().ifBlank { "gemini-3.8-flash-tts" }
+        // BUG-04: پیش‌فرض با UserPreferences یکی شد (gemini-2.5-flash-preview-tts) — یک source of truth
+        val trimmed = modelName.trim().ifBlank { "gemini-2.5-flash-preview-tts" }
         userPreferences.updateTtsModelName(trimmed)
-        showSnackbar("مدل صوتی با موفقیت روی «$trimmed» تنظیم شد.")
+        // BUG-27: مدل سفارشی خارج از دو مدل رسمی، هشدار صریح دارد
+        val isOfficial = trimmed == "gemini-2.5-flash-preview-tts" || trimmed == "gemini-2.5-pro-tts"
+        showSnackbar(
+            if (isOfficial) "مدل صوتی با موفقیت روی «$trimmed» تنظیم شد."
+            else "مدل «$trimmed» ذخیره شد؛ هشدار: مدل سفارشی خارج از دو مدل رسمی TTS ممکن است خطا بدهد."
+        )
     }
 
     fun showSnackbar(message: String) {

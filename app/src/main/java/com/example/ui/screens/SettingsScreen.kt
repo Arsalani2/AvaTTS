@@ -682,10 +682,10 @@ fun SettingsScreen(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
+                        // BUG-27: چیپ‌های پیشنهادی فقط دو مدل رسمی موجود در API گوگل
                         val suggestions = listOf(
                             "gemini-2.5-flash-preview-tts",
-                            "gemini-3.8-flash-tts",
-                            "gemini-3.5-flash"
+                            "gemini-2.5-pro-tts"
                         )
                         suggestions.forEach { modelSuggestion ->
                             val isCurrent = settings.ttsModelName == modelSuggestion

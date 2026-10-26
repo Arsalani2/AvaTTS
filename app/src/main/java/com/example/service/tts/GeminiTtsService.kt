@@ -29,11 +29,11 @@ class GeminiTtsService {
 
     private val jsonMediaType = "application/json; charset=utf-8".toMediaType()
 
-    // Model list in priority order: official Gemini TTS models with graceful fallback
+    // Model list in priority order — BUG-04: فقط مدل‌های رسمی موجود در API گوگل؛
+    // مدل‌های ناموجود قبلی حذف شدند تا هر خطای ۴۰۰ سه درخواست اضافه نسوزاند
     private val candidateModels = listOf(
         "gemini-2.5-flash-preview-tts",
-        "gemini-3.8-flash-tts",
-        "gemini-3.5-flash"
+        "gemini-2.5-pro-tts"
     )
 
     /**
@@ -72,8 +72,12 @@ class GeminiTtsService {
                 // Invalid key applies to the key
                 throw e
             } catch (e: TtsGeneralException) {
-                // If 400 (unsupported config/model) or 404 (model not found), try fallback model
-                if (e.httpCode == 400 || e.httpCode == 404) {
+                // BUG-04: فقط خطای مربوط به خودِ مدل (۴۰۴ یا ۴۰۰ِ حاوی «model»/«not found») زنجیرهٔ fallback را
+                // ادامه می‌دهد؛ خطای payload (مثل متن خیلی بلند) با امتحان مدل بعدی سهمیه نمی‌سوزاند
+                val msg = (e.message ?: "").lowercase()
+                val modelRelated = e.httpCode == 404 ||
+                    (e.httpCode == 400 && (msg.contains("model") || msg.contains("not found")))
+                if (modelRelated) {
                     lastException = e
                     continue
                 } else {
