@@ -562,6 +562,8 @@ class TtsQueueEngine(
     fun cancelQueue() {
         val currentActiveId = _queueState.value.activeChunkId
         queueJob?.cancel()
+        // BUG-16: درخواست HTTP در جریان هم فوراً لغو می‌شود، نه فقط بعد از پایانش
+        ttsService.cancelActiveRequest()
         TtsQueueService.stop(context)
         _queueState.value = QueueState(
             isRunning = false,

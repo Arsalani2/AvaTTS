@@ -3,11 +3,15 @@ package com.example.service.tts
 import android.util.Base64
 import com.example.util.WavAudioUtil
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
+import okhttp3.Call
+import okhttp3.Callback
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
+import okhttp3.Response
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.IOException
@@ -28,6 +32,18 @@ class GeminiTtsService {
         .build()
 
     private val jsonMediaType = "application/json; charset=utf-8".toMediaType()
+
+    // BUG-16: درخواست در جریان برای لغو فوری از cancelQueue نگه‌داری می‌شود
+    @Volatile
+    private var activeCall: Call? = null
+
+    /** BUG-16: لغو فوری درخواست HTTP در جریان (توقف صف وسط درخواست را می‌بُرد) */
+    fun cancelActiveRequest() {
+        try {
+            activeCall?.cancel()
+        } catch (_: Exception) {
+        }
+    }
 
     // Model list in priority order — BUG-04: فقط مدل‌های رسمی موجود در API گوگل؛
     // مدل‌های ناموجود قبلی حذف شدند تا هر خطای ۴۰۰ سه درخواست اضافه نسوزاند
@@ -97,7 +113,7 @@ class GeminiTtsService {
         throw lastException ?: TtsGeneralException("خطا در ارتباط با سرویس صوتی گوگل")
     }
 
-    private fun executeSynthesis(
+    private suspend fun executeSynthesis(
         apiKey: String,
         modelName: String,
         text: String,
@@ -140,12 +156,35 @@ class GeminiTtsService {
             .header("Content-Type", "application/json")
             .build()
 
+        // BUG-16: الگوی suspending با enqueue — لغو کوروتین (توقف صف) درخواست HTTP را فوراً می‌بُرد
+        val call = client.newCall(request)
+        activeCall = call
         val (responseBody, code, isSuccessful) = try {
-            client.newCall(request).execute().use { response ->
-                Triple(response.body?.string().orEmpty(), response.code, response.isSuccessful)
+            suspendCancellableCoroutine { cont ->
+                call.enqueue(object : Callback {
+                    override fun onFailure(call: Call, e: IOException) {
+                        if (cont.isActive) {
+                            cont.resumeWith(
+                                Result.failure(
+                                    TtsNetworkException("خطای اتصال شبکه: لطفاً اینترنت خود را بررسی کنید. (${e.message})")
+                                )
+                            )
+                        }
+                    }
+
+                    override fun onResponse(call: Call, response: Response) {
+                        response.use {
+                            val body = it.body?.string().orEmpty()
+                            if (cont.isActive) {
+                                cont.resumeWith(Result.success(Triple(body, it.code, it.isSuccessful)))
+                            }
+                        }
+                    }
+                })
+                cont.invokeOnCancellation { call.cancel() }
             }
-        } catch (e: IOException) {
-            throw TtsNetworkException("خطای اتصال شبکه: لطفاً اینترنت خود را بررسی کنید. (${e.message})")
+        } finally {
+            if (activeCall === call) activeCall = null
         }
 
         if (!isSuccessful) {
