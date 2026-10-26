@@ -1,9 +1,12 @@
 package com.example
 
 import android.Manifest
+import android.content.Context
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
+import android.provider.Settings
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -45,8 +48,10 @@ import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBarDefaults
@@ -57,6 +62,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -76,6 +82,7 @@ import com.example.ui.screens.StudioScreen
 import com.example.ui.screens.VaultScreen
 import com.example.ui.theme.AvaTtsTheme
 import com.example.ui.viewmodel.MainViewModel
+import kotlinx.coroutines.launch
 
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -108,9 +115,40 @@ class MainActivity : ComponentActivity() {
             val saveableStateHolder = rememberSaveableStateHolder()
 
             // Notification permission request for Android 13+ (POST_NOTIFICATIONS)
+            // BUG-17: رد مجوز نوتیفیکیشن دیگر بی‌صدا نمی‌ماند — راهنمای یک‌باره + دکمهٔ تنظیمات
+            val notificationScope = rememberCoroutineScope()
             val notificationPermissionLauncher = rememberLauncherForActivityResult(
                 contract = ActivityResultContracts.RequestPermission()
-            ) { /* Handled */ }
+            ) { granted ->
+                if (!granted && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                    val prefs = getSharedPreferences("avatts_notification_perm", Context.MODE_PRIVATE)
+                    val hintShown = prefs.getBoolean("denied_hint_shown", false)
+                    // اگر کاربر هنوز می‌تواند دوباره پرسیده شود، راهنما در هر رد شدن می‌آید؛
+                    // در غیر این صورت فقط یک‌بار (تا اذیت نشود)
+                    val canAskAgain = shouldShowRequestPermissionRationale(
+                        Manifest.permission.POST_NOTIFICATIONS
+                    )
+                    if (canAskAgain || !hintShown) {
+                        prefs.edit().putBoolean("denied_hint_shown", true).apply()
+                        notificationScope.launch {
+                            val result = snackbarHostState.showSnackbar(
+                                message = "بدون دسترسی نوتیفیکیشن، روند تبدیل و اعلان پایان صف دیده نمی‌شود.",
+                                actionLabel = "تنظیمات",
+                                duration = SnackbarDuration.Long
+                            )
+                            if (result == SnackbarResult.ActionPerformed) {
+                                val intent = Intent(
+                                    Settings.ACTION_APP_NOTIFICATION_SETTINGS
+                                ).apply {
+                                    putExtra(Settings.EXTRA_APP_PACKAGE, packageName)
+                                    putExtra(Settings.EXTRA_APP_UID, applicationInfo.uid)
+                                }
+                                startActivity(intent)
+                            }
+                        }
+                    }
+                }
+            }
 
             LaunchedEffect(Unit) {
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
