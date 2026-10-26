@@ -22,27 +22,23 @@ android {
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
   }
 
-  signingConfigs {
-    create("release") {
-      val keystoreFileEnv = System.getenv("KEYSTORE_FILE") ?: System.getenv("KEYSTORE_PATH")
-      val keystorePath = if (!keystoreFileEnv.isNullOrBlank()) keystoreFileEnv else "${rootDir}/AvaTTS.jks"
-      val storePasswordEnv = System.getenv("KEYSTORE_PASSWORD") ?: System.getenv("STORE_PASSWORD")
-      val keyAliasEnv = System.getenv("KEY_ALIAS") ?: "AvaTTS"
-      val keyPasswordEnv = System.getenv("KEY_PASSWORD")
+  // BUG-39: امضا فقط وقتی فایل keystore و پسوردها واقعاً موجودند فعال می‌شود؛
+  // clone تازه بدون هیچ فایل keystore باید assembleDebug/assembleRelease بیلد بدهد.
+  val releaseKeystorePath = System.getenv("KEYSTORE_FILE") ?: System.getenv("KEYSTORE_PATH") ?: "${rootDir}/AvaTTS.jks"
+  val releaseStorePassword = System.getenv("KEYSTORE_PASSWORD") ?: System.getenv("STORE_PASSWORD")
+  val releaseKeyAlias = System.getenv("KEY_ALIAS") ?: "AvaTTS"
+  val releaseKeyPassword = System.getenv("KEY_PASSWORD")
+  val releaseKeystoreReady = file(releaseKeystorePath).exists() &&
+      !releaseStorePassword.isNullOrBlank() && !releaseKeyPassword.isNullOrBlank()
 
-      val targetKeyFile = file(keystorePath)
-      if (targetKeyFile.exists() && !storePasswordEnv.isNullOrBlank() && !keyPasswordEnv.isNullOrBlank()) {
-        storeFile = targetKeyFile
-        storePassword = storePasswordEnv
-        keyAlias = keyAliasEnv
-        keyPassword = keyPasswordEnv
+  signingConfigs {
+    if (releaseKeystoreReady) {
+      create("release") {
+        storeFile = file(releaseKeystorePath)
+        storePassword = releaseStorePassword!!
+        keyAlias = releaseKeyAlias
+        keyPassword = releaseKeyPassword!!
       }
-    }
-    create("debugConfig") {
-      storeFile = file("${rootDir}/debug.keystore")
-      storePassword = "android"
-      keyAlias = "androiddebugkey"
-      keyPassword = "android"
     }
   }
 
@@ -51,9 +47,12 @@ android {
       isCrunchPngs = false
       isMinifyEnabled = false
       proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
-      signingConfig = signingConfigs.getByName("release")
+      // فقط وقتی keystore واقعی در دسترس است امضا شود؛ وگرنه خروجی unsigned (بیلد لوکال سالم)
+      if (releaseKeystoreReady) signingConfig = signingConfigs.getByName("release")
     }
-    debug { signingConfig = signingConfigs.getByName("debugConfig") }
+    // debug: keystore استاندارد AGP (~/.android/debug.keystore) خودکار ساخته می‌شود؛
+    // هیچ signingConfig سفارشی به فایل داخل ریپو وصل نیست (BUG-39)
+    debug { }
   }
   compileOptions {
     sourceCompatibility = JavaVersion.VERSION_11

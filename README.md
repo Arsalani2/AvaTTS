@@ -146,6 +146,8 @@ gradle assembleDebug
 فایل نصبی تولید شده در مسیر زیر قرار خواهد گرفت:
 `app/build/outputs/apk/debug/app-debug.apk`
 
+> **ساخت ریلیز لوکال (اختیاری):** بیلد ریلیز فقط زمانی امضا می‌شود که متغیرهای محیطی `KEYSTORE_FILE`، `KEYSTORE_PASSWORD`، `KEY_ALIAS` و `KEY_PASSWORD` تنظیم شده و فایل keystore واقعاً موجود باشد؛ بدون آن‌ها خروجی unsigned ساخته می‌شود. clone تازه بدون هیچ فایل keystore، هم `assembleDebug` و هم `assembleRelease` را بدون خطا بیلد می‌دهد (CI همین متغیرها را از Secrets می‌خواند).
+
 ---
 
 ## 🔑 دریافت کلید API گوگل (کاملاً رایگان)
