@@ -31,7 +31,9 @@ class TtsQueueService : Service() {
         val totalChunks = intent?.getIntExtra(EXTRA_TOTAL_CHUNKS, 0) ?: 0
         val completedChunks = intent?.getIntExtra(EXTRA_COMPLETED_CHUNKS, 0) ?: 0
         val keyName = intent?.getStringExtra(EXTRA_KEY_NAME) ?: ""
-        val speakerName = intent?.getStringExtra(EXTRA_SPEAKER_NAME) ?: "گوگل"
+        // BUG-38: نام گویندهٔ خالی دیگر به «گوگل» سخت‌کدشده فرو نمی‌ریزد؛
+        // مقدار واقعی از سوی engine با project.selectedVoice ارسال می‌شود
+        val speakerName = intent?.getStringExtra(EXTRA_SPEAKER_NAME)?.takeIf { it.isNotBlank() } ?: ""
         val downloadedBytes = intent?.getLongExtra(EXTRA_DOWNLOADED_BYTES, 0L) ?: 0L
         val errorCount = intent?.getIntExtra(EXTRA_ERROR_COUNT, 0) ?: 0
         val cooldownSec = intent?.getIntExtra(EXTRA_COOLDOWN_SEC, -1) ?: -1
@@ -156,7 +158,10 @@ class TtsQueueService : Service() {
                 if (errorCount > 0) {
                     append("🔴 خطاهای ثبت‌شده: $errorCount\n")
                 }
-                append("🎙 گوینده: $speakerName\n")
+                // BUG-38: خط گوینده فقط وقتی نام واقعی موجود است نمایش داده می‌شود
+                if (speakerName.isNotBlank()) {
+                    append("🎙 گوینده: $speakerName\n")
+                }
                 append("📦 دیتای دانلود شده: $downloadedStr\n")
                 if (keyName.isNotBlank()) {
                     append("🔑 کلید فعال: $keyName")
@@ -201,7 +206,10 @@ class TtsQueueService : Service() {
                 action = ACTION_START
                 putExtra(EXTRA_PROJECT_NAME, projectName)
                 putExtra(EXTRA_TOTAL_CHUNKS, totalChunks)
-                putExtra(EXTRA_SPEAKER_NAME, speaker)
+                // BUG-38: نام گویندهٔ خالی ارسال نمی‌شود تا اعلان مقدار واقعی را نشان دهد
+                if (speaker.isNotBlank()) {
+                    putExtra(EXTRA_SPEAKER_NAME, speaker)
+                }
             }
             try {
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {

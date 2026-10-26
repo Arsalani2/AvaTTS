@@ -64,7 +64,8 @@ class TtsQueueEngine(
             )
 
             // Start background foreground service with notification
-            TtsQueueService.start(context, project.name, chunkIds.size)
+            // BUG-38: نام گویندهٔ واقعی پروژه به اعلان ارسال می‌شود (نه «گوگل» سخت‌کدشده)
+            TtsQueueService.start(context, project.name, chunkIds.size, project.selectedVoice)
 
             var completedCount = 0
             var errorCount = 0
@@ -198,6 +199,7 @@ class TtsQueueEngine(
                         totalChunks = totalInQueue,
                         completedChunks = completedSoFar,
                         keyName = "خنک‌سازی ($remainingSec ثانیه)",
+                        speakerName = project.selectedVoice,
                         cooldownSec = remainingSec
                     )
 
@@ -264,7 +266,8 @@ class TtsQueueEngine(
                 currentChunk = chunk.chunkIndex,
                 totalChunks = totalInQueue,
                 completedChunks = completedSoFar,
-                keyName = candidateKey.name
+                keyName = candidateKey.name,
+                speakerName = project.selectedVoice
             )
 
             val startTime = System.currentTimeMillis()
@@ -461,7 +464,8 @@ class TtsQueueEngine(
                         currentChunk = chunk.chunkIndex,
                         totalChunks = totalInQueue,
                         completedChunks = completedSoFar,
-                        keyName = "خطای شبکه (تلاش $networkRetry از $maxNetworkRetries)"
+                        keyName = "خطای شبکه (تلاش $networkRetry از $maxNetworkRetries)",
+                        speakerName = project.selectedVoice
                     )
 
                     delay(backoffMs)
