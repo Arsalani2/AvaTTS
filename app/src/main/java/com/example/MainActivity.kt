@@ -141,7 +141,7 @@ class MainActivity : ComponentActivity() {
                                     Settings.ACTION_APP_NOTIFICATION_SETTINGS
                                 ).apply {
                                     putExtra(Settings.EXTRA_APP_PACKAGE, packageName)
-                                    putExtra(Settings.EXTRA_APP_UID, applicationInfo.uid)
+                                    // EXTRA_APP_UID عضو پنهان Settings است و در SDK عمومی وجود ندارد؛ خود PACKAGE برای ACTION_APP_NOTIFICATION_SETTINGS کافی است
                                 }
                                 startActivity(intent)
                             }
