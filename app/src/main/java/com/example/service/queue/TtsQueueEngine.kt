@@ -238,6 +238,13 @@ class TtsQueueEngine(
                     continue
                 }
 
+                // BUG-28: انتخابگرها دیگر کلیدِ در کول‌داون برنمی‌گردانند؛ اگر علتِ null
+                // این است که همهٔ کلیدها همین الان کول‌داون شدند، به gate انتظار برگردیم
+                // (چون excludedKeyIds خالی است، ریسک حلقهٔ بی‌پایان نیست)
+                if (vaultManager.hasAnyEnabledKey() && vaultManager.areAllEnabledKeysInCooldown()) {
+                    continue
+                }
+
                 val errorMsg = when {
                     !vaultManager.hasAnyKey() -> "هیچ کلیدی در گاوصندوق ثبت نشده است. لطفاً کلید API اضافه نمایید."
                     !vaultManager.hasAnyEnabledKey() -> "همه کلیدها در گاوصندوق خاموش هستند. لطفاً در گاوصندوق کلیدها را روشن کنید."
