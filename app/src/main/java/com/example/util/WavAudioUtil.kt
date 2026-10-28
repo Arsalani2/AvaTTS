@@ -137,8 +137,13 @@ object WavAudioUtil {
 
                 when (chunkId) {
                     "fmt " -> {
-                        val fmtData = ByteArray(chunkSize.toInt().coerceAtLeast(16))
-                        raf.readFully(fmtData)
+                        // BUG-20: دقیقاً chunkSize بایت خوانده می‌شود (نه ۱۶ تایی که چانک بعدی را
+                        // می‌خورد)؛ اگر fmt کمتر از ۱۶ بایت بود، بقیه با صفر pad می‌شود
+                        val remainingInFile = (raf.length() - raf.filePointer).coerceAtLeast(0L)
+                        val toRead = chunkSize.coerceIn(0L, remainingInFile).toInt()
+                        val raw = ByteArray(toRead)
+                        if (toRead > 0) raf.readFully(raw)
+                        val fmtData = if (raw.size >= 16) raw else raw + ByteArray(16 - raw.size)
                         val fmtBuf = ByteBuffer.wrap(fmtData).order(ByteOrder.LITTLE_ENDIAN)
                         val audioFormat = fmtBuf.short
                         if (audioFormat.toInt() != 1) {
@@ -149,6 +154,8 @@ object WavAudioUtil {
                         byteRate = fmtBuf.int
                         blockAlign = fmtBuf.short
                         bitsPerSample = fmtBuf.short
+                        // BUG-20: چانک با اندازهٔ فرد یک بایت pad دارد (word-alignment)
+                        if (chunkSize % 2L != 0L && raf.filePointer < raf.length()) raf.skipBytes(1)
                     }
                     "data" -> {
                         dataOffset = raf.filePointer
@@ -156,8 +163,16 @@ object WavAudioUtil {
                         break
                     }
                     else -> {
-                        val toSkip = chunkSize.coerceAtMost((raf.length() - raf.filePointer).coerceAtLeast(0L))
-                        if (toSkip > 0) raf.skipBytes(toSkip.toInt()) else break
+                        // BUG-20: skipBytes تضمینی ندارد — تا کامل شدن skip ادامه بده
+                        var toSkip = chunkSize.coerceAtMost((raf.length() - raf.filePointer).coerceAtLeast(0L))
+                        while (toSkip > 0) {
+                            val skipped = raf.skipBytes(toSkip.toInt())
+                            if (skipped <= 0) break
+                            toSkip -= skipped
+                        }
+                        if (toSkip > 0) break
+                        // BUG-20: چانک با اندازهٔ فرد یک بایت pad دارد (word-alignment)
+                        if (chunkSize % 2L != 0L && raf.filePointer < raf.length()) raf.skipBytes(1)
                     }
                 }
             }
