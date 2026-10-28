@@ -69,12 +69,12 @@ interface ChunkDao {
     }
 
     @Query("""
-        UPDATE chunks 
-        SET status = :status, 
-            audioFilePath = :audioPath, 
-            keyUsedMasked = :keyUsedMasked, 
+        UPDATE chunks
+        SET status = :status,
+            audioFilePath = :audioPath,
+            keyUsedMasked = :keyUsedMasked,
             keyUsedName = :keyUsedName,
-            durationMs = :durationMs, 
+            durationMs = :durationMs,
             errorMessage = :error,
             updatedAt = :now
         WHERE id = :chunkId
@@ -89,6 +89,25 @@ interface ChunkDao {
         error: String?,
         now: Long = System.currentTimeMillis()
     )
+
+    // BUG-41: چانکهایی که هنگام مرگ پروسه (force-stop/OOM/کرش) در وضعیت PROCESSING
+    // گیر کرده‌اند، در نخستین ساخت engine (استارتاپ بعدی) به PENDING برمی‌گردند.
+    @Query("""
+        UPDATE chunks
+        SET status = :pendingStatus,
+            audioFilePath = NULL,
+            keyUsedMasked = NULL,
+            keyUsedName = NULL,
+            durationMs = 0,
+            errorMessage = NULL,
+            updatedAt = :now
+        WHERE status = :processingStatus
+    """)
+    suspend fun resetProcessingChunks(
+        pendingStatus: String = ChunkEntity.STATUS_PENDING,
+        processingStatus: String = ChunkEntity.STATUS_PROCESSING,
+        now: Long = System.currentTimeMillis()
+    ): Int
 }
 
 @Dao

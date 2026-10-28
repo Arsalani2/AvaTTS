@@ -48,6 +48,12 @@ class TtsQueueEngine(
     private val _queueState = MutableStateFlow(QueueState())
     val queueState: StateFlow<QueueState> = _queueState.asStateFlow()
 
+    init {
+        // BUG-41: بازیابی استارتاپ — چانکهای PROCESSING از پروسهٔ مرده هرگز نباید گیر کنند؛
+        // در لحظهٔ ساخت engine هیچ صفی در جریان نیست (پروسه تازه بالا آمده) پس reset امن است.
+        scope.launch { chunkDao.resetProcessingChunks() }
+    }
+
     fun startQueue(
         project: ProjectEntity,
         chunkIds: List<Long>,
