@@ -39,6 +39,7 @@ import androidx.compose.material.icons.filled.HourglassTop
 import androidx.compose.material.icons.filled.Key
 import androidx.compose.material.icons.filled.LightMode
 import androidx.compose.material.icons.filled.Palette
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.PowerSettingsNew
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Restore
@@ -51,6 +52,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -108,6 +110,8 @@ fun SettingsScreen(
     val context = LocalContext.current
     val settings by viewModel.settings.collectAsState()
     val keys by viewModel.keys.collectAsState()
+    // BUG-35: کلید در حال تست برای حالت loading دکمهٔ «تست»
+    val testingKeyId by viewModel.testingKeyId.collectAsState()
 
     var showResetDialog by remember { mutableStateOf(false) }
 
@@ -434,12 +438,44 @@ fun SettingsScreen(
                         }
                     } else {
                         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            // BUG-35/23: بج «نیاز به ورود مجدد» — کلیدهای غیرقابل‌رمزگشایی
+                            // (مثلاً بعد از restore بکاپ) کاربر را به ورود دوباره هدایت می‌کند
+                            val undecryptableCount = remember(keys) {
+                                viewModel.vaultManager.detectUndecryptableEntries()
+                            }
+                            if (undecryptableCount > 0) {
+                                Surface(
+                                    shape = RoundedCornerShape(12.dp),
+                                    color = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.6f),
+                                    modifier = Modifier.fillMaxWidth().testTag("vault_relogin_badge")
+                                ) {
+                                    Row(
+                                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Icon(
+                                            Icons.Default.Warning,
+                                            contentDescription = null,
+                                            tint = MaterialTheme.colorScheme.onErrorContainer,
+                                            modifier = Modifier.size(16.dp)
+                                        )
+                                        Spacer(modifier = Modifier.width(8.dp))
+                                        Text(
+                                            text = "$undecryptableCount کلید روی این دستگاه قابل رمزگشایی نیست — لطفاً دوباره وارد کنید (نیاز به ورود مجدد).",
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = MaterialTheme.colorScheme.onErrorContainer
+                                        )
+                                    }
+                                }
+                            }
                             keys.forEach { item ->
                                 VaultKeyRowItem(
                                     item = item,
                                     ticker = ticker,
+                                    isTesting = testingKeyId == item.id,
                                     onToggleEnabled = { viewModel.toggleKeyEnabled(item.id) },
                                     onEdit = { keyToEdit = item },
+                                    onTest = { viewModel.testKey(item.id) },
                                     onResetCooldown = { viewModel.resetKeyCooldown(item.id) },
                                     onDelete = { keyToDelete = item }
                                 )
@@ -1093,8 +1129,10 @@ fun SettingsScreen(
 fun VaultKeyRowItem(
     item: ApiKeyItem,
     ticker: Long,
+    isTesting: Boolean = false,
     onToggleEnabled: () -> Unit,
     onEdit: () -> Unit,
+    onTest: () -> Unit = {},
     onResetCooldown: () -> Unit,
     onDelete: () -> Unit
 ) {
@@ -1175,6 +1213,18 @@ fun VaultKeyRowItem(
                 Row {
                     IconButton(onClick = onEdit, modifier = Modifier.size(32.dp)) {
                         Icon(Icons.Default.Edit, contentDescription = "Edit", tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(16.dp))
+                    }
+                    // BUG-35: دکمهٔ «تست» — تست اتصال کلید بدون خروج از گاوصندوق
+                    IconButton(
+                        onClick = onTest,
+                        enabled = !isTesting,
+                        modifier = Modifier.size(32.dp).testTag("test_key_${item.id}")
+                    ) {
+                        if (isTesting) {
+                            CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
+                        } else {
+                            Icon(Icons.Default.PlayArrow, contentDescription = "تست کلید", tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(16.dp))
+                        }
                     }
                     IconButton(onClick = onDelete, modifier = Modifier.size(32.dp)) {
                         Icon(Icons.Default.Delete, contentDescription = "Delete", tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(16.dp))

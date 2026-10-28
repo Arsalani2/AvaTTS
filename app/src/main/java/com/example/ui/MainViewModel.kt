@@ -722,25 +722,34 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    // BUG-35: کلیدی که در حال تست اتصال است — دکمهٔ «تست» حالت loading می‌گیرد
+    private val _testingKeyId = MutableStateFlow<String?>(null)
+    val testingKeyId: StateFlow<String?> = _testingKeyId.asStateFlow()
+
     fun testKey(id: String) {
         viewModelScope.launch(Dispatchers.IO) {
-            val key = vaultManager.getDecryptedKey(id)
-            if (key.isNullOrBlank()) {
-                showSnackbar("کلید معتبر نیست.")
-                return@launch
-            }
+            _testingKeyId.value = id
             try {
-                ttsService.synthesizeSpeech(key, "تست اتصال کلید", "Kore")
-                vaultManager.recordSuccess(id)
-                showSnackbar("اتصال به سرویس صوتی گوگل موفقیت‌آمیز بود.")
-            } catch (e: TtsNetworkException) {
-                // BUG-03: خطای شبکه جریمهٔ کلید نیست — آمار کلید دست‌نخورده می‌ماند
-                showSnackbar("ارتباط شبکه برقرار نیست؛ اینترنت خود را بررسی کنید. (کلید شما جریمه نشد)")
-            } catch (e: kotlinx.coroutines.CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                vaultManager.recordError(id, isQuotaLimit = e.message?.contains("429") == true)
-                showSnackbar("خطا در تست کلید: ${e.message}")
+                val key = vaultManager.getDecryptedKey(id)
+                if (key.isNullOrBlank()) {
+                    showSnackbar("کلید معتبر نیست.")
+                    return@launch
+                }
+                try {
+                    ttsService.synthesizeSpeech(key, "تست اتصال کلید", "Kore")
+                    vaultManager.recordSuccess(id)
+                    showSnackbar("اتصال به سرویس صوتی گوگل موفقیت‌آمیز بود.")
+                } catch (e: TtsNetworkException) {
+                    // BUG-03: خطای شبکه جریمهٔ کلید نیست — آمار کلید دست‌نخورده می‌ماند
+                    showSnackbar("ارتباط شبکه برقرار نیست؛ اینترنت خود را بررسی کنید. (کلید شما جریمه نشد)")
+                } catch (e: kotlinx.coroutines.CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    vaultManager.recordError(id, isQuotaLimit = e.message?.contains("429") == true)
+                    showSnackbar("خطا در تست کلید: ${e.message}")
+                }
+            } finally {
+                _testingKeyId.value = null
             }
         }
     }
