@@ -2,7 +2,6 @@ package com.example.data.vault
 
 import android.content.Context
 import android.content.SharedPreferences
-import com.example.BuildConfig
 import com.example.security.KeystoreHelper
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -25,17 +24,9 @@ class ApiKeyVaultManager(private val context: Context) {
 
     init {
         loadKeys()
-        // If vault is completely empty and BuildConfig has an injected key, seed it safely!
-        if (_keys.value.isEmpty()) {
-            val envKey = try {
-                BuildConfig.GEMINI_API_KEY
-            } catch (e: Exception) {
-                ""
-            }
-            if (envKey.isNotBlank() && envKey != "MY_GEMINI_API_KEY") {
-                addKey("کلید پیش‌فرض استودیو", envKey)
-            }
-        }
+        // BUG-22: seed کلید از BuildConfig کامل حذف شد — BuildConfig داخل dex در APK
+        // حضور دارد و با apktool استخراج می‌شود؛ گاوصندوق خودش برای کلید هست و
+        // .env/.env.example فقط راهنمای توسعه‌دهنده است (کلید واقعی هرگز کامپایل نشود).
     }
 
     @Synchronized
