@@ -144,6 +144,15 @@ class ApiKeyVaultManager(private val context: Context) {
         return null
     }
 
+    /**
+     * BUG-23/35: تعداد کلیدهایی که رمزگشایی برایشان ناموفق است (مثلاً پس از
+     * restore بکاپ روی دستگاه جدید — ciphertext بدون KeyStore مبدا بی‌معنی است).
+     * کاربر را به ورود مجدد کلیدها هدایت می‌کند.
+     */
+    @Synchronized
+    fun detectUndecryptableEntries(): Int =
+        _keys.value.count { KeystoreHelper.decrypt(it.encryptedKey).isBlank() && !it.encryptedKey.startsWith("AIzaSy") }
+
     @Synchronized
     fun toggleKeyEnabled(id: String): Boolean {
         val current = _keys.value.toMutableList()
