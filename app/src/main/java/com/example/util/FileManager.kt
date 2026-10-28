@@ -124,6 +124,20 @@ class FileManager(
         }
     }
 
+    /**
+     * BUG-06: پاک‌سازی best-effort پوشهٔ صوتی پروژه هنگام حذف پروژه —
+     * شکست پاک‌سازی، حذف رکوردها را بلاک نمی‌کند.
+     */
+    fun deleteProjectFolder(projectName: String, customRoot: String? = null): Boolean {
+        return try {
+            val root = getRootTtsDirectory(customRoot)
+            val dir = File(root, sanitizeFileName(projectName))
+            if (dir.exists()) dir.deleteRecursively() else true
+        } catch (e: Exception) {
+            false
+        }
+    }
+
     companion object {
         /**
          * Opens a file or its parent folder in the device's default File Manager or Audio Player.

@@ -111,6 +111,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val _showRestartDialog = MutableStateFlow(false)
     val showRestartDialog: StateFlow<Boolean> = _showRestartDialog.asStateFlow()
 
+    // BUG-06: تعداد بخشهای COMPLETED که با بازتقسیم از دست می‌روند — null یعنی دیالوگ بسته است
+    private val _pendingResplitConfirmation = MutableStateFlow<Int?>(null)
+    val pendingResplitConfirmation: StateFlow<Int?> = _pendingResplitConfirmation.asStateFlow()
+
     // User Feedback Toast/Snackbar message
     private val _snackbarMessage = MutableStateFlow<String?>(null)
     val snackbarMessage: StateFlow<String?> = _snackbarMessage.asStateFlow()
@@ -295,6 +299,16 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun deleteProject(project: ProjectEntity) {
         viewModelScope.launch(Dispatchers.IO) {
+            // BUG-06: پوشهٔ صوتی پروژه نباید orphan بماند — فایلها + پوشه best-effort
+            // پاک می‌شوند؛ شکست پاک‌سازی هرگز حذف خود پروژه را بلاک نمی‌کند (فقط لاگ)
+            try {
+                repository.getChunksDirect(project.id).forEach { chunk ->
+                    fileManager.deleteAudioFile(chunk.audioFilePath)
+                }
+                fileManager.deleteProjectFolder(project.name, project.folderName)
+            } catch (e: Exception) {
+                android.util.Log.w("MainViewModel", "BUG-06 cleanup failed for ${project.name}", e)
+            }
             repository.deleteProject(project)
             val remaining = repository.allProjects.firstOrNull()?.filter { it.id != project.id } ?: emptyList()
             if (_selectedProject.value?.id == project.id) {
@@ -347,6 +361,35 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun applyChunking() {
+        // BUG-06: بازتقسیم روی پروژهٔ دارای بخش COMPLETED فقط با تأیید صریح کاربر —
+        // یک ویرایش/ایمپورت کوچک نباید تبدیل‌های موفق را بی‌هشدار پاک کند
+        val completedCount = chunks.value.count { it.status == ChunkEntity.STATUS_COMPLETED }
+        if (completedCount > 0) {
+            _pendingResplitConfirmation.value = completedCount
+            return
+        }
+        performChunking()
+    }
+
+    /** BUG-06: کاربر تأیید کرد — فایل‌های صوتی قدیمی پاک و تقسیم‌بندی مجدد اجرا می‌شود */
+    fun confirmResplit() {
+        _pendingResplitConfirmation.value = null
+        viewModelScope.launch(Dispatchers.IO) {
+            // فایل‌های wav چانکهای COMPLETED قبلی از دیسک پاک شوند تا orphan نمانند
+            chunks.value
+                .filter { it.status == ChunkEntity.STATUS_COMPLETED }
+                .forEach { chunk -> fileManager.deleteAudioFile(chunk.audioFilePath) }
+            performChunking()
+        }
+    }
+
+    /** BUG-06: کاربر انصراف زد — هیچ چیزی پاک یا بازتقسیم نمی‌شود */
+    fun cancelResplit() {
+        _pendingResplitConfirmation.value = null
+        showSnackbar("بازتقسیم لغو شد؛ تبدیل‌های قبلی دست‌نخورده باقی ماند.")
+    }
+
+    private fun performChunking() {
         val text = _currentText.value
         if (text.isBlank()) {
             showSnackbar("لطفاً ابتدا متنی وارد کنید.")
