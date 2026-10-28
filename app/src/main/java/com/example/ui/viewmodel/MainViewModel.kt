@@ -484,12 +484,16 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             showSnackbar("لطفاً ابتدا پروژه را انتخاب یا ایجاد کنید.")
             return
         }
-        val allIds = chunks.value.map { it.id }
-        if (allIds.isEmpty()) {
-            showSnackbar("هیچ بخشی برای تبدیل وجود ندارد.")
+        // BUG-42: «تبدیل همه» فقط بخش‌های ناتمام را به Gemini می‌فرستد — چانک‌های COMPLETED
+        // دوباره تبدیل نمی‌شوند تا سهمیهٔ کلیدها نسوزد و فایل‌های سالم بازنویسی نشوند
+        val pendingIds = chunks.value
+            .filter { it.status != ChunkEntity.STATUS_COMPLETED }
+            .map { it.id }
+        if (pendingIds.isEmpty()) {
+            showSnackbar("تمام بخش‌های این پروژه قبلاً تبدیل شده‌اند.")
             return
         }
-        queueEngine.startQueue(project, allIds) { completedId ->
+        queueEngine.startQueue(project, pendingIds) { completedId ->
             deselectChunk(completedId)
         }
     }
