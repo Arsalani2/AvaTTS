@@ -2,5 +2,7 @@
 <paths>
     <external-files-path name="music_files" path="." />
     <files-path name="internal_files" path="." />
-    <external-path name="external_storage" path="." />
+    <!-- BUG-29: دسترسی به کل حافظهٔ خارجی از FileProvider حذف شد؛ فقط مسیرهای لازم -->
+    <external-path name="music" path="Music/" />
+    <external-path name="download" path="Download/" />
 </paths>
