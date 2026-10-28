@@ -504,6 +504,10 @@ class TtsQueueEngine(
                     message = finalNetMsg
                 )
                 return false
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                // BUG-40: لغو صف (توقف کاربر) خطای کلید نیست — استثنا باید بالا برود تا
+                // کوروتین صف بمیرد و نه recordError کلید سالم را جریمه کند (روح فیکس BUG-03)
+                throw e
             } catch (e: Exception) {
                 val latency = System.currentTimeMillis() - startTime
                 // Place key into temporary 25s cooldown on ANY error to avoid immediate repeated failure
