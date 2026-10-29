@@ -74,7 +74,6 @@ import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.ui.components.AudioPlayerBar
-import com.example.ui.components.RestartPromptDialog
 import com.example.ui.screens.LogsScreen
 import com.example.ui.screens.ProjectsScreen
 import com.example.ui.screens.SettingsScreen
@@ -104,7 +103,6 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             val settings by viewModel.settings.collectAsState()
-            val showRestartDialog by viewModel.showRestartDialog.collectAsState()
             val snackbarMessage by viewModel.snackbarMessage.collectAsState()
             val playerState by viewModel.playerState.collectAsState()
             val keys by viewModel.keys.collectAsState()
@@ -330,13 +328,6 @@ class MainActivity : ComponentActivity() {
                                 }
                             }
                         }
-                    }
-
-                    // Theme Change Restart Prompt Dialog
-                    if (showRestartDialog) {
-                        RestartPromptDialog(
-                            onDismiss = { viewModel.dismissRestartDialog() }
-                        )
                     }
                 }
             }

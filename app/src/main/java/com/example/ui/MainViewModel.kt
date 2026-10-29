@@ -108,10 +108,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val _selectedChunkIds = MutableStateFlow<Set<Long>>(emptySet())
     val selectedChunkIds: StateFlow<Set<Long>> = _selectedChunkIds.asStateFlow()
 
-    // Restart Dialog Trigger
-    private val _showRestartDialog = MutableStateFlow(false)
-    val showRestartDialog: StateFlow<Boolean> = _showRestartDialog.asStateFlow()
-
     // BUG-06: تعداد بخشهای COMPLETED که با بازتقسیم از دست می‌روند — null یعنی دیالوگ بسته است
     private val _pendingResplitConfirmation = MutableStateFlow<Int?>(null)
     val pendingResplitConfirmation: StateFlow<Int?> = _pendingResplitConfirmation.asStateFlow()
@@ -781,10 +777,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun setStorageTreeUri(uri: String) {
         userPreferences.updateStorageTreeUri(uri)
-    }
-
-    fun dismissRestartDialog() {
-        _showRestartDialog.value = false
     }
 
     fun resetSettingsToDefault() {
