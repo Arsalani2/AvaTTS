@@ -26,7 +26,6 @@ data class AppSettings(
     val defaultChunkSize: Int = 500,
     val lastSelectedVoice: String = "Kore",
     val defaultStorageFolder: String = "TTS",
-    val speechRate: Float = 1.0f,
     val ttsModelName: String = "gemini-2.5-flash-preview-tts",
     val isSquareLayout: Boolean = false,
     val isCircularChart: Boolean = false,
@@ -52,7 +51,6 @@ class UserPreferences(context: Context) {
             defaultChunkSize = prefs.getInt("default_chunk_size", 500),
             lastSelectedVoice = prefs.getString("last_voice", "Kore") ?: "Kore",
             defaultStorageFolder = prefs.getString("default_storage_folder", "TTS") ?: "TTS",
-            speechRate = prefs.getFloat("speech_rate", 1.0f),
             ttsModelName = prefs.getString("tts_model_name", "gemini-2.5-flash-preview-tts") ?: "gemini-2.5-flash-preview-tts",
             isSquareLayout = prefs.getBoolean("is_square_layout", false),
             isCircularChart = prefs.getBoolean("is_circular_chart", false),
@@ -105,11 +103,6 @@ class UserPreferences(context: Context) {
         val clean = folder.trim().ifBlank { "TTS" }
         prefs.edit().putString("default_storage_folder", clean).apply()
         _settings.value = _settings.value.copy(defaultStorageFolder = clean)
-    }
-
-    fun updateSpeechRate(rate: Float) {
-        prefs.edit().putFloat("speech_rate", rate).apply()
-        _settings.value = _settings.value.copy(speechRate = rate)
     }
 
     fun hasSeededInitialProject(): Boolean {

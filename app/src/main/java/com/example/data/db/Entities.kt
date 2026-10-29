@@ -14,6 +14,9 @@ data class ProjectEntity(
     val rawText: String = "",
     val chunkSize: Int = 500,
     val selectedVoice: String = "Kore",
+    // BUG-36: ستون مردهٔ speechRate — هیچ‌جای برنامه خوانده/نوشته نمی‌شود و به مدل TTS
+    // هم ارسال نمی‌شود؛ برای پرهیز از مهاجرت Room حذف نشده (در نسخهٔ بعدی برداشته شود)
+    @Deprecated("استفاده نشده — سرعت گفتار در Gemini TTS پشتیبانی نمی‌شود (BUG-36)")
     val speechRate: Float = 1.0f,
     val folderName: String = "TTS",
     val isLocked: Boolean = false,
