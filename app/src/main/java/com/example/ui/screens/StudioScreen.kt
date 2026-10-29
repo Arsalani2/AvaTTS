@@ -151,9 +151,9 @@ fun StudioScreen(
             val activeIndex = chunks.indexOfFirst { it.id == queueState.activeChunkId }
             val targetIndex = if (activeIndex >= 0) activeIndex else chunks.indexOfFirst { it.status != ChunkEntity.STATUS_COMPLETED }
             if (targetIndex >= 0) {
+                // BUG-37: شمارش هدرها با آیتم‌های واقعی LazyColumn یکی شد —
+                // «project selector» و «project summary» آیتمی در لیست ندارند
                 var headerCount = 1 // project_header
-                if (projects.isNotEmpty()) headerCount++ // project selector
-                if (selectedProject != null) headerCount++ // project summary
                 if (!isLocked) headerCount += 3 // text editor, voice card, chunk controls
                 if (chunks.isNotEmpty()) headerCount++ // progress chart
                 headerCount++ // queue management
