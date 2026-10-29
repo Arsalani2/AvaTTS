@@ -588,13 +588,21 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             showSnackbar("کلید API نمی‌تواند خالی باشد.")
             return
         }
-        vaultManager.addKey(name, rawKey)
-        showSnackbar("کلید جدید در گاوصندوق امن ذخیره شد.")
+        val added = vaultManager.addKey(name, rawKey)
+        // BUG-07 (تکمیل): شکست Keystore = رد ذخیره؛ کلید خام در prefs نمی‌رود
+        showSnackbar(
+            if (added != null) "کلید جدید در گاوصندوق امن ذخیره شد."
+            else "ذخیره امن روی این دستگاه ممکن نیست؛ دوباره تلاش کنید یا دستگاه را ری‌استارت کنید."
+        )
     }
 
     fun updateApiKey(id: String, name: String, rawKey: String?) {
-        vaultManager.updateKey(id, name, rawKey)
-        showSnackbar("اطلاعات کلید به‌روز شد.")
+        val ok = vaultManager.updateKey(id, name, rawKey)
+        // BUG-07 (تکمیل): شکست رمزنگاری کلید جدید = رد کامل (کلید قدیمی دست‌نخورده می‌ماند)
+        showSnackbar(
+            if (ok) "اطلاعات کلید به‌روز شد."
+            else "ذخیره امن روی این دستگاه ممکن نیست؛ دوباره تلاش کنید یا دستگاه را ری‌استارت کنید."
+        )
     }
 
     fun deleteApiKey(id: String) {

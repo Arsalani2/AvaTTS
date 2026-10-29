@@ -63,9 +63,11 @@ class ApiKeyVaultManager(private val context: Context) {
     }
 
     @Synchronized
-    fun addKey(name: String, rawKey: String): ApiKeyItem {
+    // BUG-07 (تکمیل ۲۰۲۶-۱۰-۲۹): در شکست KeystoreHelper کلید خام ذخیره نمی‌شود — null = خطای رمزنگاری
+    fun addKey(name: String, rawKey: String): ApiKeyItem? {
         val trimmedKey = rawKey.trim()
-        val encrypted = KeystoreHelper.encrypt(trimmedKey).ifBlank { trimmedKey }
+        val encrypted = KeystoreHelper.encrypt(trimmedKey)
+        if (encrypted.isBlank()) return null
         val masked = ApiKeyItem.maskKey(trimmedKey)
         val newItem = ApiKeyItem(
             id = UUID.randomUUID().toString(),
@@ -91,9 +93,13 @@ class ApiKeyVaultManager(private val context: Context) {
         val old = current[index]
         val updated = if (!newRawKey.isNullOrBlank()) {
             val trimmed = newRawKey.trim()
+            // BUG-07 (تکمیل ۲۰۲۶-۱۰-۲۹): شکست رمزنگاری = رد کامل؛ fallback خام حذف شد —
+            // کلید Plaintext هرگز در SharedPreferences نوشته نمی‌شود
+            val encrypted = KeystoreHelper.encrypt(trimmed)
+            if (encrypted.isBlank()) return false
             old.copy(
                 name = newName.ifBlank { old.name },
-                encryptedKey = KeystoreHelper.encrypt(trimmed).ifBlank { trimmed },
+                encryptedKey = encrypted,
                 maskedKey = ApiKeyItem.maskKey(trimmed),
                 status = KeyStatus.HEALTHY,
                 cooldownUntil = 0L
@@ -119,7 +125,19 @@ class ApiKeyVaultManager(private val context: Context) {
         val item = _keys.value.firstOrNull { it.id == id } ?: return null
         val decrypted = KeystoreHelper.decrypt(item.encryptedKey)
         if (decrypted.isNotBlank()) return decrypted
-        if (item.encryptedKey.startsWith("AIzaSy")) return item.encryptedKey
+        if (item.encryptedKey.startsWith("AIzaSy")) {
+            // BUG-07 (تکمیل): self-heal — کلید قدیمی خام یک‌بار رمزنگاری و در prefs جایگزین می‌شود
+            val healed = KeystoreHelper.encrypt(item.encryptedKey)
+            if (healed.isNotBlank()) {
+                val cur = _keys.value.toMutableList()
+                val idx = cur.indexOfFirst { it.id == id }
+                if (idx != -1) {
+                    cur[idx] = cur[idx].copy(encryptedKey = healed)
+                    persistKeys(cur)
+                }
+            }
+            return item.encryptedKey
+        }
         return null
     }
 
