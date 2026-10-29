@@ -109,7 +109,10 @@ class MainActivity : ComponentActivity() {
             val playerState by viewModel.playerState.collectAsState()
             val keys by viewModel.keys.collectAsState()
 
-            var currentTab by remember { mutableStateOf(AppTab.STUDIO) }
+            // BUG-25: تب فعال با rememberSaveable ذخیره می‌شود تا در بازآفرینی Activity
+            // (چرخش صفحه، kill فرآیند در پس‌زمینه) به استودیو ریست نشود
+            var currentTabIndex by rememberSaveable { mutableStateOf(0) }
+            val currentTab = AppTab.values().getOrNull(currentTabIndex) ?: AppTab.STUDIO
             val snackbarHostState = remember { SnackbarHostState() }
             val saveableStateHolder = rememberSaveableStateHolder()
 
@@ -168,7 +171,7 @@ class MainActivity : ComponentActivity() {
 
             // Back button handling: if on secondary tab, return to Studio first
             BackHandler(enabled = currentTab != AppTab.STUDIO) {
-                currentTab = AppTab.STUDIO
+                currentTabIndex = AppTab.STUDIO.ordinal
             }
 
             // Snackbar listener
@@ -232,7 +235,7 @@ class MainActivity : ComponentActivity() {
                                         modifier = Modifier
                                             .padding(end = 12.dp)
                                             .clip(RoundedCornerShape(12.dp))
-                                            .clickable { currentTab = AppTab.SETTINGS }
+                                            .clickable { currentTabIndex = AppTab.SETTINGS.ordinal } // BUG-25
                                             .testTag("topbar_vault_badge")
                                     ) {
                                         Row(
@@ -281,7 +284,7 @@ class MainActivity : ComponentActivity() {
                                         val isSelected = currentTab == tab
                                         NavigationBarItem(
                                             selected = isSelected,
-                                            onClick = { currentTab = tab },
+                                            onClick = { currentTabIndex = tab.ordinal }, // BUG-25
                                             modifier = Modifier.testTag(tab.tag),
                                             icon = {
                                                 if (tab == AppTab.SETTINGS && keys.isEmpty()) {
@@ -320,7 +323,7 @@ class MainActivity : ComponentActivity() {
                                     AppTab.STUDIO -> StudioScreen(viewModel = viewModel, listState = studioListState)
                                     AppTab.PROJECTS -> ProjectsScreen(
                                         viewModel = viewModel,
-                                        onNavigateToStudio = { currentTab = AppTab.STUDIO }
+                                        onNavigateToStudio = { currentTabIndex = AppTab.STUDIO.ordinal } // BUG-25
                                     )
                                     AppTab.LOGS -> LogsScreen(viewModel = viewModel, listState = logsListState)
                                     AppTab.SETTINGS -> SettingsScreen(viewModel = viewModel, listState = settingsListState)
