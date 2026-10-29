@@ -499,9 +499,12 @@ private fun resolveLogStatus(log: ConversionLogEntity): Triple<String, Color, Im
 
 private fun extractPathFromMessage(message: String): String? {
     if (!message.contains("/")) return null
-    // Matches path patterns like /storage/... or /data/... or similar absolute paths
-    val regex = Regex("(/[^\\s]+)")
-    return regex.find(message)?.value
+    // BUG-15: پیام merge مسیر را بین «مسیر» و «ذخیره شد» می‌آورد؛ نام پروژه/پوشه
+    // می‌تواند فاصله داشته باشد، پس regex «تا اولین فاصله» مسیر را می‌برید
+    val between = message.substringAfter("مسیر ", "").substringBefore(" ذخیره").trim()
+    if (between.startsWith("/")) return between
+    // پیام‌های قدیمی بدون نشانگر «مسیر»: fallback همان regex قبلی
+    return Regex("(/[^\\s]+)").find(message)?.value
 }
 
 private fun formatLogDateTime(timestamp: Long): String {
