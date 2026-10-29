@@ -99,11 +99,8 @@ class ApiKeyVaultManager(private val context: Context) {
                 cooldownUntil = 0L
             )
         } else {
-            old.copy(
-                name = newName.ifBlank { old.name },
-                status = KeyStatus.HEALTHY,
-                cooldownUntil = 0L
-            )
+            // BUG-21: تغییر فقط نام، وضعیت/کول‌داون کلید را صفر نمی‌کند
+            old.copy(name = newName.ifBlank { old.name })
         }
         current[index] = updated
         persistKeys(current)

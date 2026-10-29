@@ -27,7 +27,8 @@ class GeminiTtsService {
 
     private val client: OkHttpClient = OkHttpClient.Builder()
         .connectTimeout(60, TimeUnit.SECONDS)
-        .readTimeout(60, TimeUnit.SECONDS)
+        // BUG-21: readTimeout=60s برای چانک‌های بلند کم بود — به 120s افزایش یافت
+        .readTimeout(120, TimeUnit.SECONDS)
         .writeTimeout(60, TimeUnit.SECONDS)
         .build()
 

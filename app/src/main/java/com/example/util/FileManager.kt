@@ -58,7 +58,8 @@ class FileManager(
 
         // 3. Fallback to App's External Music directory
         try {
-            val appExt = context.getExternalFilesDir(Environment.DIRECTORY_MUSIC)
+            // BUG-21: getExternalFilesDir می‌تواند null برگرداند (حافظهٔ unmounted)
+            val appExt = context.getExternalFilesDir(Environment.DIRECTORY_MUSIC) ?: context.filesDir
             val customDir = File(appExt, folderName)
             if (customDir.exists() || customDir.mkdirs()) {
                 return customDir
@@ -159,10 +160,11 @@ class FileManager(
                 val target = if (file.exists()) file else file.parentFile ?: file
 
                 if (target.isDirectory) {
-                    val uri: Uri = try {
+                    // BUG-21: Uri.fromFile منسوخ (FileUriExposedException در اندروید ۷+) — در شکست FileProvider مستقیم Toast مسیر
+                    val uri: Uri? = try {
                         FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", target)
                     } catch (_: Exception) {
-                        Uri.fromFile(target)
+                        null
                     }
 
                     val candidateMimes = listOf(
@@ -172,7 +174,8 @@ class FileManager(
                     )
 
                     var launched = false
-                    for (mime in candidateMimes) {
+                    // BUG-21: بدون uri معتبر، حلقه نمی‌چرخد و Toast مسیر نمایش داده می‌شود
+                    for (mime in if (uri != null) candidateMimes else emptyList()) {
                         try {
                             val intent = Intent(Intent.ACTION_VIEW).apply {
                                 setDataAndType(uri, mime)
@@ -190,10 +193,15 @@ class FileManager(
                         Toast.makeText(context, "مسیر پوشه:\n${target.absolutePath}", Toast.LENGTH_LONG).show()
                     }
                 } else {
-                    val uri: Uri = try {
+                    // BUG-21: Uri.fromFile منسوخ — در شکست FileProvider مستقیم Toast مسیر
+                    val uri: Uri? = try {
                         FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", target)
                     } catch (_: Exception) {
-                        Uri.fromFile(target)
+                        null
+                    }
+                    if (uri == null) {
+                        Toast.makeText(context, "مسیر فایل:\n${target.absolutePath}", Toast.LENGTH_LONG).show()
+                        return
                     }
 
                     val mime = when {

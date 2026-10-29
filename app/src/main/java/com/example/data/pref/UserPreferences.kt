@@ -116,8 +116,11 @@ class UserPreferences(context: Context) {
 
     fun resetToDefaults() {
         val seeded = hasSeededInitialProject()
+        // BUG-21: lastActiveProjectId حفظ می‌شود تا کاربر بعد از ریسِت به اولین پروژه پرتاب نشود
+        val lastActiveProjectId = getLastActiveProjectId()
         prefs.edit().clear().apply()
         setSeededInitialProject(seeded)
+        setLastActiveProjectId(lastActiveProjectId)
         _settings.value = AppSettings()
     }
 }

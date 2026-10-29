@@ -10,6 +10,7 @@ import android.content.Intent
 import android.graphics.Color
 import android.os.Build
 import android.os.IBinder
+import android.os.PowerManager
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import com.example.MainActivity
@@ -18,6 +19,31 @@ import java.util.Locale
 class TtsQueueService : Service() {
 
     override fun onBind(intent: Intent?): IBinder? = null
+
+    // BUG-21: PARTIAL_WAKE_LOCK تا CPU حین صف طولانی در Doze خاموش نشود
+    // (مجوز WAKE_LOCK از قبل در manifest بود ولی استفاده نمی‌شد)
+    private var wakeLock: PowerManager.WakeLock? = null
+
+    private fun acquireWakeLock() {
+        if (wakeLock?.isHeld == true) return
+        val pm = getSystemService(Context.POWER_SERVICE) as PowerManager
+        wakeLock = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "AvaTTS:queue").apply {
+            setReferenceCounted(false)
+            acquire(30 * 60 * 1000L) // مهلت ایمنی: ۳۰ دقیقه
+        }
+    }
+
+    private fun releaseWakeLock() {
+        try {
+            wakeLock?.takeIf { it.isHeld }?.release()
+        } catch (_: Exception) {}
+        wakeLock = null
+    }
+
+    override fun onDestroy() {
+        releaseWakeLock()
+        super.onDestroy()
+    }
 
     override fun onCreate() {
         super.onCreate()
@@ -53,11 +79,13 @@ class TtsQueueService : Service() {
                     cooldownSec = cooldownSec
                 )
                 startForeground(NOTIFICATION_ID_FOREGROUND, notification)
+                acquireWakeLock()
             }
             ACTION_STOP -> {
                 // BUG-01: «توقف صف» از اعلان، صف واقعی را هم متوقف می‌کند (یکی از سه مسیر مجاز لغو)؛
                 // پایان طبیعی صف هم از همین مسیر سرویس را خاموش می‌کند
                 QueueEngineHolder.peek()?.cancelQueue()
+                releaseWakeLock()
                 stopForeground(STOP_FOREGROUND_REMOVE)
                 stopSelf()
             }

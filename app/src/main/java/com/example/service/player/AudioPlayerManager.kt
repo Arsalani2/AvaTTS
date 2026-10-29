@@ -1,6 +1,7 @@
 package com.example.service.player
 
 import android.content.Context
+import android.media.AudioManager
 import android.media.MediaPlayer
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -29,6 +30,32 @@ class AudioPlayerManager(private val context: Context) {
     private val scope = CoroutineScope(Dispatchers.Main + Job())
     private var progressTickerJob: Job? = null
 
+    // BUG-21: Audio Focus — پخش دیگر با موسیقی دستگاه هم‌زمان نمی‌افتد
+    private val audioManager: AudioManager get() = context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
+    private var hasAudioFocus = false
+    @SuppressWarnings("deprecation") // requestAudioFocus ساده برای minSdk 24 کفایت می‌کند
+    private val audioFocusListener = AudioManager.OnAudioFocusChangeListener { focusChange ->
+        when (focusChange) {
+            AudioManager.AUDIOFOCUS_LOSS,
+            AudioManager.AUDIOFOCUS_LOSS_TRANSIENT,
+            AudioManager.AUDIOFOCUS_LOSS_TRANSIENT_CAN_DUCK -> pause()
+        }
+    }
+    @SuppressWarnings("deprecation")
+    private fun requestAudioFocus(): Boolean {
+        if (hasAudioFocus) return true
+        val result = audioManager.requestAudioFocus(audioFocusListener, AudioManager.STREAM_MUSIC, AudioManager.AUDIOFOCUS_GAIN)
+        hasAudioFocus = result == AudioManager.AUDIOFOCUS_REQUEST_GRANTED
+        return hasAudioFocus
+    }
+    @SuppressWarnings("deprecation")
+    private fun abandonAudioFocus() {
+        if (hasAudioFocus) {
+            audioManager.abandonAudioFocus(audioFocusListener)
+            hasAudioFocus = false
+        }
+    }
+
     private val _playerState = MutableStateFlow(PlayerState())
     val playerState: StateFlow<PlayerState> = _playerState.asStateFlow()
 
@@ -56,6 +83,11 @@ class AudioPlayerManager(private val context: Context) {
 
     private fun startPlayback(audioPath: String, chunkId: Long) {
         release()
+        // BUG-21: بدون Audio Focus پخش شروع نمی‌شود (احترام به پخش‌کنندهٔ دیگر)
+        if (!requestAudioFocus()) {
+            _playerState.value = PlayerState(error = "پخش صوتی هم‌اکنون ممکن نیست؛ برنامهٔ صوتی دیگری در حال پخش است.")
+            return
+        }
         try {
             val player = MediaPlayer().apply {
                 setDataSource(audioPath)
@@ -168,6 +200,8 @@ class AudioPlayerManager(private val context: Context) {
 
     fun release() {
         stopTicker()
+        // BUG-21: رهاکردن Audio Focus همراه با آزادکردن پلیر
+        abandonAudioFocus()
         try {
             mediaPlayer?.let { mp ->
                 try {
