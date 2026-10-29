@@ -22,6 +22,7 @@ import com.example.service.queue.TtsQueueEngine
 import com.example.service.tts.GeminiTtsService
 import com.example.service.tts.TtsNetworkException
 import com.example.util.FileManager
+import com.example.util.PersianDigits
 import com.example.util.SmartTextChunker
 import com.example.util.WavAudioUtil
 import kotlinx.coroutines.Dispatchers
@@ -227,7 +228,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun createProject(name: String, description: String, text: String = "") {
         viewModelScope.launch(Dispatchers.IO) {
-            val size = _chunkSizeInput.value.toIntOrNull() ?: settings.value.defaultChunkSize
+            val size = resolveChunkSize() // BUG-12
             val voice = _selectedVoiceName.value
             val newProject = ProjectEntity(
                 name = name.ifBlank { "پروژه جدید" },
@@ -341,13 +342,20 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun updateChunkSizeInput(sizeStr: String) {
         if (_isLocked.value) return
+        // BUG-12: ورودی فقط state محلی را آپدیت می‌کند — ذخیره (پروژه + پیش‌فرض سراسری)
+        // فقط هنگام applyChunking انجام می‌شود؛ تایپ موقت دیگر پیش‌فرض همهٔ
+        // پروژه‌های بعدی را بازنویسی نمی‌کند
         _chunkSizeInput.value = sizeStr
-        val sizeInt = sizeStr.toIntOrNull() ?: return
-        userPreferences.updateDefaultChunkSize(sizeInt)
-        val project = _selectedProject.value ?: return
-        viewModelScope.launch(Dispatchers.IO) {
-            repository.saveProject(project.copy(chunkSize = sizeInt, updatedAt = System.currentTimeMillis()))
+    }
+
+    /** BUG-12: ارقام فارسی/عربی پذیرفته و در بازهٔ ۱۰۰ تا ۵۰۰۰ محدود می‌شود */
+    private fun resolveChunkSize(): Int {
+        val fallback = _selectedProject.value?.chunkSize ?: settings.value.defaultChunkSize
+        val raw = PersianDigits.normalize(_chunkSizeInput.value).toIntOrNull() ?: return fallback.coerceIn(100, 5000)
+        if (raw < 100 || raw > 5000) {
+            showSnackbar("اندازهٔ هر بخش باید بین ۱۰۰ تا ۵۰۰۰ کاراکتر باشد؛ مقدار در همین محدوده تنظیم شد.")
         }
+        return raw.coerceIn(100, 5000)
     }
 
     fun selectVoice(voiceName: String) {
@@ -395,7 +403,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             showSnackbar("لطفاً ابتدا متنی وارد کنید.")
             return
         }
-        val size = _chunkSizeInput.value.toIntOrNull() ?: 500
+        val size = resolveChunkSize() // BUG-12: نرمال‌سازی ارقام فارسی + محدودهٔ ۱۰۰..۵۰۰۰
         val project = _selectedProject.value
         viewModelScope.launch(Dispatchers.IO) {
             val targetProject = if (project == null) {
