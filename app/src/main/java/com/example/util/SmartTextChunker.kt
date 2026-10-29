@@ -33,7 +33,9 @@ object SmartTextChunker {
             var splitIndex = -1
 
             for (i in end - 1 downTo searchWindowStart) {
-                if (trimmed[i] in SENTENCE_DELIMITERS) {
+                // BUG-11: مرز فقط با اعتبارسنجی واقعی پذیرفته می‌شود —
+                // نقطهٔ اعشار (3.14)، ساعت (12:30)، URL و ایمیل دیگر جمله را نمی‌شکنند
+                if (trimmed[i] in SENTENCE_DELIMITERS && isSentenceBoundary(trimmed, i)) {
                     splitIndex = i + 1
                     break
                 }
@@ -77,5 +79,25 @@ object SmartTextChunker {
         }
 
         return chunks.filter { it.isNotBlank() }
+    }
+
+    /**
+     * BUG-11: تشخیص مرز واقعی جمله برای '.'، ':'، '؛' (و علائم پایان همیشه معتبر):
+     * - کاراکتر بعدی باید فاصله یا پایان متن باشد (نه 12:30 یا 3.14)
+     * - کاراکتر قبلی نباید رقم باشد (اعشار)
+     * - توکن جاری نباید URL (شامل //) یا ایمیل (شامل @) باشد
+     */
+    private fun isSentenceBoundary(text: String, index: Int): Boolean {
+        val ch = text[index]
+        if (ch == '\n' || ch == '!' || ch == '?' || ch == '؟') return true
+        val next = text.getOrNull(index + 1)
+        val prev = text.getOrNull(index - 1)
+        if (next != null && !Character.isWhitespace(next)) return false
+        if (prev != null && prev.isDigit()) return false
+        var s = index
+        while (s > 0 && !Character.isWhitespace(text[s - 1])) s--
+        val token = text.substring(s, index)
+        if (token.contains("//") || token.contains('@')) return false
+        return true
     }
 }
