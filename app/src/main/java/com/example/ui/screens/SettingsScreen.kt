@@ -471,7 +471,9 @@ fun SettingsScreen(
                             keys.forEach { item ->
                                 VaultKeyRowItem(
                                     item = item,
-                                    ticker = ticker,
+                                    // BUG-18: ticker فقط به ردیف‌های در حال خنک‌سازی داده می‌شود —
+                                    // کلیدهای سالم هر ثانیه recompose نمی‌شوند (پارامتر ثابت = skip)
+                                    ticker = if (item.isCooldownActive) ticker else 0L,
                                     isTesting = testingKeyId == item.id,
                                     onToggleEnabled = { viewModel.toggleKeyEnabled(item.id) },
                                     onEdit = { keyToEdit = item },
