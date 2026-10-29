@@ -26,6 +26,10 @@ import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
@@ -124,12 +128,21 @@ fun AudioPlayerBar(
             }
 
             // Progress Slider
+            // BUG-26: هنگام درگ، مقدار محلی نمایش داده می‌شود و seek فقط یک‌بار
+            // هنگام رهاکردن انگشت فراخوانی می‌شود — هر تیک درگ دیگر MediaPlayer
+            // را seek نمی‌کند (قبلاً صدای خردشده + skip صدیوس بود)
+            var isDragging by remember { mutableStateOf(false) }
+            var dragValue by remember { mutableFloatStateOf(0f) }
             val duration = playerState.totalDurationMs.coerceAtLeast(1L).toFloat()
             val currentPos = playerState.currentPositionMs.coerceIn(0L, playerState.totalDurationMs).toFloat()
 
             Slider(
-                value = currentPos,
-                onValueChange = { onSeek(it.toLong()) },
+                value = if (isDragging) dragValue else currentPos,
+                onValueChange = { dragValue = it; isDragging = true },
+                onValueChangeFinished = {
+                    onSeek(dragValue.toLong())
+                    isDragging = false
+                },
                 valueRange = 0f..duration,
                 colors = SliderDefaults.colors(
                     thumbColor = MaterialTheme.colorScheme.primary,
