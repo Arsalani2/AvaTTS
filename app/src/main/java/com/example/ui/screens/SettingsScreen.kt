@@ -1,9 +1,5 @@
 package com.example.ui.screens
 
-import android.content.Intent
-import android.net.Uri
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
@@ -34,7 +30,6 @@ import androidx.compose.material.icons.filled.DarkMode
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Folder
-import androidx.compose.material.icons.filled.FolderOpen
 import androidx.compose.material.icons.filled.HourglassTop
 import androidx.compose.material.icons.filled.Key
 import androidx.compose.material.icons.filled.LightMode
@@ -131,35 +126,8 @@ fun SettingsScreen(
 
     val coolingKeys = keys.filter { it.isCooldownActive }
 
-    // Folder Picker via OpenDocumentTree
-    val folderPickerLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.OpenDocumentTree()
-    ) { uri: Uri? ->
-        if (uri != null) {
-            try {
-                val takeFlags = Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION
-                context.contentResolver.takePersistableUriPermission(uri, takeFlags)
-            } catch (_: Exception) {}
-
-            viewModel.setStorageTreeUri(uri.toString())
-
-            // Extract displayable folder name
-            val pathSegment = uri.path ?: uri.toString()
-            val cleanFolder = when {
-                pathSegment.contains("primary:") -> {
-                    val sub = pathSegment.substringAfter("primary:").trim('/')
-                    if (sub.isNotBlank()) sub else "AvaTTS"
-                }
-                pathSegment.contains(":") -> {
-                    val sub = pathSegment.substringAfter(":").trim('/')
-                    if (sub.isNotBlank()) sub else "AvaTTS"
-                }
-                else -> pathSegment.substringAfterLast("/").ifBlank { "AvaTTS" }
-            }
-            viewModel.setStorageFolder(cleanFolder)
-            viewModel.showSnackbar("پوشه مقصد با موفقیت تنظیم شد: $cleanFolder")
-        }
-    }
+    // BUG-08: انتخابگر پوشهٔ SAF حذف شد — FileManager به دایرکتوری‌های عمومی
+    // (Music/<پوشه> یا Download) می‌نویسد؛ storageTreeUri ذخیره می‌شد ولی هیچ‌جا استفاده نمی‌شد.
 
     var selectedTabIndex by rememberSaveable { mutableIntStateOf(0) }
 
@@ -598,16 +566,7 @@ fun SettingsScreen(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        Button(
-                            onClick = { folderPickerLauncher.launch(null) },
-                            shape = RoundedCornerShape(10.dp),
-                            modifier = Modifier.weight(1f).testTag("btn_browse_folder")
-                        ) {
-                            Icon(Icons.Default.FolderOpen, contentDescription = null, modifier = Modifier.size(16.dp))
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text("انتخاب پوشه با فایل‌ها", fontSize = 12.sp)
-                        }
-
+                        // BUG-08: دکمهٔ «انتخاب پوشه با فایل‌ها» حذف شد (وعدهٔ غلط SAF)
                         OutlinedButton(
                             onClick = {
                                 val rootDir = viewModel.fileManager.getRootTtsDirectory(settings.defaultStorageFolder)
@@ -627,7 +586,8 @@ fun SettingsScreen(
                         viewModel.fileManager.getRootTtsDirectory(settings.defaultStorageFolder).absolutePath
                     }
                     Text(
-                        text = "مسیر فیزیکی فعال در دستگاه:\n$resolvedDir",
+                        // BUG-08: متن راهنما صادقانه — خروجی در پوشه‌های عمومی موسیقی دستگاه ذخیره می‌شود
+                        text = "خروجی در مسیر عمومی موسیقی دستگاه ذخیره می‌شود (پوشهٔ مقصد: نام زیرپوشه در Music):\n$resolvedDir",
                         style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.sp, fontFamily = FontFamily.Monospace),
                         color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f)
                     )

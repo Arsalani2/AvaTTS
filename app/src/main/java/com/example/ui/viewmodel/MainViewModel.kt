@@ -754,10 +754,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         userPreferences.updateStorageFolder(folder)
     }
 
-    fun setStorageTreeUri(uri: String) {
-        userPreferences.updateStorageTreeUri(uri)
-    }
-
     fun dismissRestartDialog() {
         _showRestartDialog.value = false
     }

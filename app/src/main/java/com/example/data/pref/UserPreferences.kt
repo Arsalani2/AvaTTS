@@ -28,8 +28,7 @@ data class AppSettings(
     val defaultStorageFolder: String = "TTS",
     val ttsModelName: String = "gemini-2.5-flash-preview-tts",
     val isSquareLayout: Boolean = false,
-    val isCircularChart: Boolean = false,
-    val storageTreeUri: String = ""
+    val isCircularChart: Boolean = false
 )
 
 class UserPreferences(context: Context) {
@@ -53,8 +52,7 @@ class UserPreferences(context: Context) {
             defaultStorageFolder = prefs.getString("default_storage_folder", "TTS") ?: "TTS",
             ttsModelName = prefs.getString("tts_model_name", "gemini-2.5-flash-preview-tts") ?: "gemini-2.5-flash-preview-tts",
             isSquareLayout = prefs.getBoolean("is_square_layout", false),
-            isCircularChart = prefs.getBoolean("is_circular_chart", false),
-            storageTreeUri = prefs.getString("storage_tree_uri", "") ?: ""
+            isCircularChart = prefs.getBoolean("is_circular_chart", false)
         )
     }
 
@@ -66,11 +64,6 @@ class UserPreferences(context: Context) {
     fun updateCircularChart(isCircular: Boolean) {
         prefs.edit().putBoolean("is_circular_chart", isCircular).apply()
         _settings.value = _settings.value.copy(isCircularChart = isCircular)
-    }
-
-    fun updateStorageTreeUri(uriString: String) {
-        prefs.edit().putString("storage_tree_uri", uriString).apply()
-        _settings.value = _settings.value.copy(storageTreeUri = uriString)
     }
 
     fun updateTtsModelName(modelName: String) {
