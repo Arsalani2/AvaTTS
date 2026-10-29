@@ -1,10 +1,14 @@
 package com.example.util
 
+import android.Manifest
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.net.Uri
+import android.os.Build
 import android.os.Environment
 import android.widget.Toast
+import androidx.core.content.ContextCompat
 import androidx.core.content.FileProvider
 import com.example.data.pref.UserPreferences
 import java.io.File
@@ -27,23 +31,30 @@ class FileManager(
         // If user gave a relative name like "AvaTTS" or "Podcasts"
         val folderName = if (configured.contains("/")) configured.substringAfterLast("/").ifBlank { "AvaTTS" } else configured
 
-        // 1. Try public Music folder (most accessible for audio/TTS files)
-        try {
-            val publicMusic = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_MUSIC)
-            val customDir = File(publicMusic, folderName)
-            if (customDir.exists() || customDir.mkdirs()) {
-                return customDir
-            }
-        } catch (_: Exception) {}
+        // BUG-09: روی API ≤ 28 نوشتن در دایرکتوری‌های عمومی بدون مجوز WRITE_EXTERNAL_STORAGE ممکن نیست؛
+        // بدون مجوز مستقیم به fallback خصوصی می‌رویم تا مسیر نمایشی تنظیمات با مسیر واقعی یکی باشد.
+        val canUsePublicDirs = Build.VERSION.SDK_INT >= 29 ||
+            ContextCompat.checkSelfPermission(context, Manifest.permission.WRITE_EXTERNAL_STORAGE) == PackageManager.PERMISSION_GRANTED
 
-        // 2. Try public Downloads folder
-        try {
-            val publicDownloads = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
-            val customDir = File(publicDownloads, folderName)
-            if (customDir.exists() || customDir.mkdirs()) {
-                return customDir
-            }
-        } catch (_: Exception) {}
+        if (canUsePublicDirs) {
+            // 1. Try public Music folder (most accessible for audio/TTS files)
+            try {
+                val publicMusic = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_MUSIC)
+                val customDir = File(publicMusic, folderName)
+                if (customDir.exists() || customDir.mkdirs()) {
+                    return customDir
+                }
+            } catch (_: Exception) {}
+
+            // 2. Try public Downloads folder
+            try {
+                val publicDownloads = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
+                val customDir = File(publicDownloads, folderName)
+                if (customDir.exists() || customDir.mkdirs()) {
+                    return customDir
+                }
+            } catch (_: Exception) {}
+        }
 
         // 3. Fallback to App's External Music directory
         try {

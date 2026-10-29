@@ -1,5 +1,10 @@
 package com.example.ui.screens
 
+import android.Manifest
+import android.content.pm.PackageManager
+import android.os.Build
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
@@ -76,6 +81,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.core.content.ContextCompat
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -128,6 +134,24 @@ fun SettingsScreen(
 
     // BUG-08: انتخابگر پوشهٔ SAF حذف شد — FileManager به دایرکتوری‌های عمومی
     // (Music/<پوشه> یا Download) می‌نویسد؛ storageTreeUri ذخیره می‌شد ولی هیچ‌جا استفاده نمی‌شد.
+
+    // BUG-09: در اندروید ۷–۹ (API ≤ 28) نوشتن در Music/Download نیازمند مجوز WRITE_EXTERNAL_STORAGE است
+    val needsLegacyWritePermission = Build.VERSION.SDK_INT <= Build.VERSION_CODES.P
+    var legacyWriteGranted by remember {
+        mutableStateOf(
+            !needsLegacyWritePermission ||
+                ContextCompat.checkSelfPermission(context, Manifest.permission.WRITE_EXTERNAL_STORAGE) == PackageManager.PERMISSION_GRANTED
+        )
+    }
+    val legacyWritePermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        legacyWriteGranted = granted
+        viewModel.showSnackbar(
+            if (granted) "اجازهٔ نوشتن در حافظه داده شد — خروجی در پوشهٔ Music دستگاه ذخیره می‌شود."
+            else "اجازه داده نشد؛ فایل‌ها در پوشهٔ خصوصی برنامه ذخیره می‌شوند."
+        )
+    }
 
     var selectedTabIndex by rememberSaveable { mutableIntStateOf(0) }
 
@@ -591,6 +615,32 @@ fun SettingsScreen(
                         style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.sp, fontFamily = FontFamily.Monospace),
                         color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f)
                     )
+
+                    // BUG-09: بنر درخواست مجوز نوشتن برای اندروید ۷–۹
+                    if (needsLegacyWritePermission && !legacyWriteGranted) {
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Surface(
+                            shape = RoundedCornerShape(12.dp),
+                            color = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.6f),
+                            modifier = Modifier.fillMaxWidth().testTag("legacy_write_perm_banner")
+                        ) {
+                            Column(modifier = Modifier.padding(12.dp)) {
+                                Text(
+                                    text = "برای ذخیره در پوشهٔ Music دستگاه (اندروید ۷–۹) اجازهٔ نوشتن در حافظه لازم است؛ در غیر این صورت فایل‌ها در پوشهٔ خصوصی برنامه ذخیره می‌شوند.",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onErrorContainer
+                                )
+                                Spacer(modifier = Modifier.height(8.dp))
+                                Button(
+                                    onClick = { legacyWritePermissionLauncher.launch(Manifest.permission.WRITE_EXTERNAL_STORAGE) },
+                                    shape = RoundedCornerShape(8.dp),
+                                    modifier = Modifier.testTag("btn_legacy_write_permission")
+                                ) {
+                                    Text("اجازهٔ نوشتن در حافظه", fontSize = 12.sp)
+                                }
+                            }
+                        }
+                    }
                 }
             }
         }
