@@ -25,6 +25,7 @@ import kotlinx.coroutines.launch
 
 data class QueueState(
     val isRunning: Boolean = false,
+    val activeProjectId: Long? = null,
     val activeChunkId: Long? = null,
     val totalInQueue: Int = 0,
     val completedInQueue: Int = 0,
@@ -73,6 +74,7 @@ class TtsQueueEngine(
             try {
                 _queueState.value = QueueState(
                     isRunning = true,
+                    activeProjectId = project.id,
                     totalInQueue = chunkIds.size,
                     completedInQueue = 0,
                     currentStatusMessage = "شروع پردازش صف..."

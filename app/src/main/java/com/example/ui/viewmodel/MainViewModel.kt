@@ -299,6 +299,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun deleteProject(project: ProjectEntity) {
+        val currentQueue = queueEngine.queueState.value
+        if (currentQueue.isRunning && (currentQueue.activeProjectId == project.id || _selectedProject.value?.id == project.id)) {
+            showSnackbar("عملیات ممکن نیست؛ صف تبدیل این پروژه در حال اجراست. ابتدا صف را متوقف کنید.")
+            return
+        }
         viewModelScope.launch(Dispatchers.IO) {
             // BUG-06: پوشهٔ صوتی پروژه نباید orphan بماند — فایلها + پوشه best-effort
             // پاک می‌شوند؛ شکست پاک‌سازی هرگز حذف خود پروژه را بلاک نمی‌کند (فقط لاگ)
@@ -369,6 +374,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun applyChunking() {
+        if (queueEngine.queueState.value.isRunning) {
+            showSnackbar("امکان بازتقسیم متن در حین اجرای صف وجود ندارد. لطفاً ابتدا صف را متوقف کنید.")
+            return
+        }
         // BUG-06: بازتقسیم روی پروژهٔ دارای بخش COMPLETED فقط با تأیید صریح کاربر —
         // یک ویرایش/ایمپورت کوچک نباید تبدیل‌های موفق را بی‌هشدار پاک کند
         val completedCount = chunks.value.count { it.status == ChunkEntity.STATUS_COMPLETED }
@@ -382,6 +391,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     /** BUG-06: کاربر تأیید کرد — فایل‌های صوتی قدیمی پاک و تقسیم‌بندی مجدد اجرا می‌شود */
     fun confirmResplit() {
         _pendingResplitConfirmation.value = null
+        if (queueEngine.queueState.value.isRunning) {
+            showSnackbar("امکان بازتقسیم متن در حین اجرای صف وجود ندارد. لطفاً ابتدا صف را متوقف کنید.")
+            return
+        }
         viewModelScope.launch(Dispatchers.IO) {
             // فایل‌های wav چانکهای COMPLETED قبلی از دیسک پاک شوند تا orphan نمانند
             chunks.value
