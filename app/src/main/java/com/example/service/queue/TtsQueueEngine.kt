@@ -70,113 +70,140 @@ class TtsQueueEngine(
         }
 
         queueJob = scope.launch {
-            _queueState.value = QueueState(
-                isRunning = true,
-                totalInQueue = chunkIds.size,
-                completedInQueue = 0,
-                currentStatusMessage = "شروع پردازش صف..."
-            )
-
-            // Start background foreground service with notification
-            // BUG-38: نام گویندهٔ واقعی پروژه به اعلان ارسال می‌شود (نه «گوگل» سخت‌کدشده)
-            TtsQueueService.start(context, project.name, chunkIds.size, project.selectedVoice)
-
-            var completedCount = 0
-            var errorCount = 0
-            var totalDownloadedBytes = 0L
-
-            for ((loopIndex, chunkId) in chunkIds.withIndex()) {
-                val chunk = chunkDao.getChunkById(chunkId) ?: continue
-
-                // Add gradual pacing delay between requests to avoid rate limits (Google API throttling prevention)
-                if (loopIndex > 0) {
-                    _queueState.value = _queueState.value.copy(
-                        currentStatusMessage = "خنک‌سازی و آماده‌سازی برای بخش ${chunk.chunkIndex}..."
-                    )
-                    delay(1800L)
-                }
-
-                _queueState.value = _queueState.value.copy(
-                    activeChunkId = chunkId,
-                    currentStatusMessage = "در حال پردازش بخش ${chunk.chunkIndex}..."
-                )
-
-                // Update notification
-                TtsQueueService.updateProgress(
-                    context = context,
-                    projectName = project.name,
-                    currentChunk = chunk.chunkIndex,
-                    totalChunks = chunkIds.size,
-                    completedChunks = completedCount,
-                    keyName = "درحال انتخاب",
-                    speakerName = project.selectedVoice,
-                    downloadedBytes = totalDownloadedBytes,
-                    errorCount = errorCount
-                )
-
-                // Mark as processing in DB
-                repository.updateChunkStatus(
-                    chunkId = chunkId,
-                    status = ChunkEntity.STATUS_PROCESSING,
-                    audioPath = null,
-                    keyUsedMasked = null,
-                    keyUsedName = null,
-                    durationMs = 0L,
-                    error = null
-                )
-
-                // Process chunk with round-robin rotational key selection & automatic failover
-                val processSuccess = processChunkWithFailover(
-                    project = project,
-                    chunk = chunk,
+            try {
+                _queueState.value = QueueState(
+                    isRunning = true,
                     totalInQueue = chunkIds.size,
-                    completedSoFar = completedCount,
-                    onBytesDownloaded = { bytes -> totalDownloadedBytes += bytes }
+                    completedInQueue = 0,
+                    currentStatusMessage = "شروع پردازش صف..."
                 )
-                if (processSuccess) {
-                    completedCount++
-                    // Immediately deselect converted chunk
-                    onChunkCompleted?.invoke(chunk.id)
-                } else {
-                    errorCount++
+
+                // Start background foreground service with notification
+                // BUG-38: نام گویندهٔ واقعی پروژه به اعلان ارسال می‌شود (نه «گوگل» سخت‌کدشده)
+                TtsQueueService.start(context, project.name, chunkIds.size, project.selectedVoice)
+
+                var completedCount = 0
+                var errorCount = 0
+                var totalDownloadedBytes = 0L
+
+                for ((loopIndex, chunkId) in chunkIds.withIndex()) {
+                    val chunk = chunkDao.getChunkById(chunkId) ?: continue
+
+                    // Add gradual pacing delay between requests to avoid rate limits (Google API throttling prevention)
+                    if (loopIndex > 0) {
+                        _queueState.value = _queueState.value.copy(
+                            currentStatusMessage = "خنک‌سازی و آماده‌سازی برای بخش ${chunk.chunkIndex}..."
+                        )
+                        delay(1800L)
+                    }
+
+                    _queueState.value = _queueState.value.copy(
+                        activeChunkId = chunkId,
+                        currentStatusMessage = "در حال پردازش بخش ${chunk.chunkIndex}..."
+                    )
+
+                    // Update notification
+                    TtsQueueService.updateProgress(
+                        context = context,
+                        projectName = project.name,
+                        currentChunk = chunk.chunkIndex,
+                        totalChunks = chunkIds.size,
+                        completedChunks = completedCount,
+                        keyName = "درحال انتخاب",
+                        speakerName = project.selectedVoice,
+                        downloadedBytes = totalDownloadedBytes,
+                        errorCount = errorCount
+                    )
+
+                    // Mark as processing in DB
+                    repository.updateChunkStatus(
+                        chunkId = chunkId,
+                        status = ChunkEntity.STATUS_PROCESSING,
+                        audioPath = null,
+                        keyUsedMasked = null,
+                        keyUsedName = null,
+                        durationMs = 0L,
+                        error = null
+                    )
+
+                    // Process chunk with round-robin rotational key selection & automatic failover
+                    val processSuccess = processChunkWithFailover(
+                        project = project,
+                        chunk = chunk,
+                        totalInQueue = chunkIds.size,
+                        completedSoFar = completedCount,
+                        onBytesDownloaded = { bytes -> totalDownloadedBytes += bytes }
+                    )
+                    if (processSuccess) {
+                        completedCount++
+                        // Immediately deselect converted chunk
+                        onChunkCompleted?.invoke(chunk.id)
+                    } else {
+                        errorCount++
+                    }
+
+                    _queueState.value = _queueState.value.copy(
+                        completedInQueue = completedCount
+                    )
+
+                    // Update notification progress
+                    TtsQueueService.updateProgress(
+                        context = context,
+                        projectName = project.name,
+                        currentChunk = chunk.chunkIndex,
+                        totalChunks = chunkIds.size,
+                        completedChunks = completedCount,
+                        keyName = "",
+                        speakerName = project.selectedVoice,
+                        downloadedBytes = totalDownloadedBytes,
+                        errorCount = errorCount
+                    )
                 }
 
-                _queueState.value = _queueState.value.copy(
-                    completedInQueue = completedCount
+                _queueState.value = QueueState(
+                    isRunning = false,
+                    activeChunkId = null,
+                    totalInQueue = chunkIds.size,
+                    completedInQueue = completedCount,
+                    currentStatusMessage = "پردازش صف پایان یافت ($completedCount از ${chunkIds.size} موفق)."
                 )
 
-                // Update notification progress
-                TtsQueueService.updateProgress(
+                // Stop Foreground Service and display rich Completion Notification
+                TtsQueueService.stop(context)
+                TtsQueueService.showCompletionNotification(
                     context = context,
                     projectName = project.name,
-                    currentChunk = chunk.chunkIndex,
                     totalChunks = chunkIds.size,
                     completedChunks = completedCount,
-                    keyName = "",
-                    speakerName = project.selectedVoice,
-                    downloadedBytes = totalDownloadedBytes,
-                    errorCount = errorCount
+                    errorCount = errorCount,
+                    speaker = project.selectedVoice
                 )
+            } finally {
+                // BUG-47: تضمین ریست وضعیت صف و توقف سرویس پس‌زمینه حتی در صورت رخداد خطای پیش‌بینی‌نشده
+                if (_queueState.value.isRunning) {
+                    val activeId = _queueState.value.activeChunkId
+                    _queueState.value = _queueState.value.copy(
+                        isRunning = false,
+                        activeChunkId = null
+                    )
+                    if (activeId != null) {
+                        try {
+                            repository.updateChunkStatus(
+                                chunkId = activeId,
+                                status = ChunkEntity.STATUS_PENDING,
+                                audioPath = null,
+                                keyUsedMasked = null,
+                                keyUsedName = null,
+                                durationMs = 0L,
+                                error = null
+                            )
+                        } catch (e: Exception) {
+                            e.printStackTrace()
+                        }
+                    }
+                    TtsQueueService.stop(context)
+                }
             }
-
-            _queueState.value = QueueState(
-                isRunning = false,
-                activeChunkId = null,
-                totalInQueue = chunkIds.size,
-                completedInQueue = completedCount,
-                currentStatusMessage = "پردازش صف پایان یافت ($completedCount از ${chunkIds.size} موفق)."
-            )
-
-            // Stop Foreground Service and display rich Completion Notification
-            TtsQueueService.stop(context)
-            TtsQueueService.showCompletionNotification(
-                context = context,
-                projectName = project.name,
-                totalChunks = chunkIds.size,
-                completedChunks = completedCount,
-                errorCount = errorCount,
-                speaker = project.selectedVoice
-            )
         }
     }
 
