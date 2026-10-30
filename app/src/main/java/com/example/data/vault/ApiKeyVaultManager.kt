@@ -22,6 +22,9 @@ class ApiKeyVaultManager(private val context: Context) {
     // (both single chunk and queue conversions!)
     private val rotationCounter = AtomicInteger(0)
 
+    // BUG-28: streak های 429 برای هر کلید — خنک‌سازی افزایشی 60s → 120s → 240s
+    private val quotaLimitStreaks = mutableMapOf<String, Int>()
+
     init {
         loadKeys()
         // BUG-22: seed کلید از BuildConfig کامل حذف شد — BuildConfig داخل dex در APK
@@ -181,12 +184,12 @@ class ApiKeyVaultManager(private val context: Context) {
         val nonExcluded = allEnabled.filter { it.id !in excludeKeyIds }
         val candidates = if (nonExcluded.isNotEmpty()) nonExcluded else allEnabled
 
-        // Priority 1: Healthy keys not currently in cooldown
+        // BUG-28: فقط کلیدهای سالمِ خارج از کول‌داون؛ کلید در حال خنک‌سازی تحویل موتور صف نمی‌شود
         val healthy = candidates.filter { it.cooldownUntil <= now }
-        val pool = if (healthy.isNotEmpty()) healthy else candidates
+        if (healthy.isEmpty()) return null
 
         // Stable ordering by createdAt so round robin rotates systematically
-        val sorted = pool.sortedBy { it.createdAt }
+        val sorted = healthy.sortedBy { it.createdAt }
         val safeIndex = Math.floorMod(roundIndex, sorted.size)
         return sorted[safeIndex]
     }
@@ -197,23 +200,14 @@ class ApiKeyVaultManager(private val context: Context) {
     @Synchronized
     fun selectOptimalKey(excludeKeyIds: Set<String> = emptySet()): ApiKeyItem? {
         val now = System.currentTimeMillis()
-        val allEnabled = _keys.value.filter { it.isEnabled }
-        if (allEnabled.isEmpty()) return null
-
-        val nonExcluded = allEnabled.filter { it.id !in excludeKeyIds }
-        val candidates = if (nonExcluded.isNotEmpty()) nonExcluded else allEnabled
-
-        // First choice: Healthy keys not in cooldown
-        val healthy = candidates.filter { it.cooldownUntil <= now }
-        if (healthy.isNotEmpty()) {
-            return healthy.sortedWith(
-                compareByDescending<ApiKeyItem> { it.stabilityScore }
-                    .thenBy { it.lastUsedAt ?: 0L }
-            ).first()
-        }
-
-        // If all keys are in cooldown, pick the one closest to cooldown expiry
-        return candidates.minByOrNull { it.cooldownUntil }
+        // BUG-28: فقط کلیدهای سالمِ خارج از کول‌داون — fallback «نزدیک‌ترین انقضا» حذف شد؛
+        // در نبودِ کلید سالم null برمی‌گردد و gate کول‌داونِ صف مسئول انتظار است
+        val healthy = _keys.value.filter { it.isEnabled && it.id !in excludeKeyIds && it.cooldownUntil <= now }
+        if (healthy.isEmpty()) return null
+        return healthy.sortedWith(
+            compareByDescending<ApiKeyItem> { it.stabilityScore }
+                .thenBy { it.lastUsedAt ?: 0L }
+        ).first()
     }
 
     /**
@@ -249,6 +243,8 @@ class ApiKeyVaultManager(private val context: Context) {
         val index = current.indexOfFirst { it.id == id }
         if (index != -1) {
             val item = current[index]
+            // BUG-28: موفقیت، streak خنک‌سازی 429 را ری‌ست می‌کند
+            quotaLimitStreaks.remove(item.id)
             current[index] = item.copy(
                 lastUsedAt = System.currentTimeMillis(),
                 successCount = item.successCount + 1,
@@ -267,8 +263,14 @@ class ApiKeyVaultManager(private val context: Context) {
             val item = current[index]
             val now = System.currentTimeMillis()
             // Never permanently lock enabled keys into INVALID status.
-            // If quota limit -> 60s cooldown; other errors -> 25s temporary cooldown
-            val newCooldown = if (isQuotaLimit) now + 60_000L else now + 25_000L
+            // BUG-28: خنک‌سازی 429 افزایشی است — 60s → 120s → 240s (سقف 240s)؛
+            // خطای غیر-سهمیه 25s ثابت. streak فقط با موفقیت ری‌ست می‌شود.
+            val newCooldown = if (isQuotaLimit) {
+                val streak = (quotaLimitStreaks[item.id] ?: 0) + 1
+                quotaLimitStreaks[item.id] = streak
+                val multiplier = 1L shl (kotlin.math.min(streak - 1, 2))
+                now + 60_000L * multiplier
+            } else now + 25_000L
 
             current[index] = item.copy(
                 lastUsedAt = now,
@@ -286,6 +288,8 @@ class ApiKeyVaultManager(private val context: Context) {
         val index = current.indexOfFirst { it.id == id }
         if (index != -1) {
             val item = current[index]
+            // BUG-28: لغو دستی خنک‌سازی، streak 429 را هم ری‌ست می‌کند
+            quotaLimitStreaks.remove(item.id)
             current[index] = item.copy(
                 cooldownUntil = 0L,
                 status = if (item.isEnabled) KeyStatus.HEALTHY else KeyStatus.INVALID
@@ -297,6 +301,8 @@ class ApiKeyVaultManager(private val context: Context) {
     @Synchronized
     fun resetAllCooldowns() {
         val current = _keys.value.toMutableList()
+        // BUG-28: ری‌ست کامل، همهٔ streakهای 429 هم پاک می‌کند
+        quotaLimitStreaks.clear()
         for (i in 0 until current.size) {
             val item = current[i]
             current[i] = item.copy(
@@ -305,5 +311,13 @@ class ApiKeyVaultManager(private val context: Context) {
             )
         }
         persistKeys(current)
+    }
+
+    // BUG-23: شمارش کلیدهایی که پس از بکاپ/انتقال به دستگاه دیگر قابل رمزگشایی نیستند
+    @Synchronized
+    fun detectUndecryptableEntries(): Int {
+        return _keys.value.count { item ->
+            item.encryptedKey.isNotBlank() && KeystoreHelper.decrypt(item.encryptedKey).isBlank()
+        }
     }
 }

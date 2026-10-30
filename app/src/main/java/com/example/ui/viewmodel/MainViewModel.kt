@@ -22,6 +22,7 @@ import com.example.service.queue.TtsQueueEngine
 import com.example.service.tts.GeminiTtsService
 import com.example.service.tts.TtsNetworkException
 import com.example.util.FileManager
+import com.example.util.PersianDigits
 import com.example.util.SmartTextChunker
 import com.example.util.WavAudioUtil
 import kotlinx.coroutines.Dispatchers
@@ -107,9 +108,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val _selectedChunkIds = MutableStateFlow<Set<Long>>(emptySet())
     val selectedChunkIds: StateFlow<Set<Long>> = _selectedChunkIds.asStateFlow()
 
-    // Restart Dialog Trigger
-    private val _showRestartDialog = MutableStateFlow(false)
-    val showRestartDialog: StateFlow<Boolean> = _showRestartDialog.asStateFlow()
+    // BUG-35: کلیدی که در حال تست اتصال است — دکمهٔ «تست» حالت loading می‌گیرد
+    private val _testingKeyId = MutableStateFlow<String?>(null)
+    val testingKeyId: StateFlow<String?> = _testingKeyId.asStateFlow()
 
     // BUG-06: تعداد بخشهای COMPLETED که با بازتقسیم از دست می‌روند — null یعنی دیالوگ بسته است
     private val _pendingResplitConfirmation = MutableStateFlow<Int?>(null)
@@ -227,7 +228,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun createProject(name: String, description: String, text: String = "") {
         viewModelScope.launch(Dispatchers.IO) {
-            val size = _chunkSizeInput.value.toIntOrNull() ?: settings.value.defaultChunkSize
+            val size = resolveChunkSize() // BUG-12
             val voice = _selectedVoiceName.value
             val newProject = ProjectEntity(
                 name = name.ifBlank { "پروژه جدید" },
@@ -341,13 +342,20 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun updateChunkSizeInput(sizeStr: String) {
         if (_isLocked.value) return
+        // BUG-12: ورودی فقط state محلی را آپدیت می‌کند — ذخیره (پروژه + پیش‌فرض سراسری)
+        // فقط هنگام applyChunking انجام می‌شود؛ تایپ موقت دیگر پیش‌فرض همهٔ
+        // پروژه‌های بعدی را بازنویسی نمی‌کند
         _chunkSizeInput.value = sizeStr
-        val sizeInt = sizeStr.toIntOrNull() ?: return
-        userPreferences.updateDefaultChunkSize(sizeInt)
-        val project = _selectedProject.value ?: return
-        viewModelScope.launch(Dispatchers.IO) {
-            repository.saveProject(project.copy(chunkSize = sizeInt, updatedAt = System.currentTimeMillis()))
+    }
+
+    /** BUG-12: ارقام فارسی/عربی پذیرفته و در بازهٔ ۱۰۰ تا ۵۰۰۰ محدود می‌شود */
+    private fun resolveChunkSize(): Int {
+        val fallback = _selectedProject.value?.chunkSize ?: settings.value.defaultChunkSize
+        val raw = PersianDigits.normalize(_chunkSizeInput.value).toIntOrNull() ?: return fallback.coerceIn(100, 5000)
+        if (raw < 100 || raw > 5000) {
+            showSnackbar("اندازهٔ هر بخش باید بین ۱۰۰ تا ۵۰۰۰ کاراکتر باشد؛ مقدار در همین محدوده تنظیم شد.")
         }
+        return raw.coerceIn(100, 5000)
     }
 
     fun selectVoice(voiceName: String) {
@@ -395,7 +403,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             showSnackbar("لطفاً ابتدا متنی وارد کنید.")
             return
         }
-        val size = _chunkSizeInput.value.toIntOrNull() ?: 500
+        val size = resolveChunkSize() // BUG-12: نرمال‌سازی ارقام فارسی + محدودهٔ ۱۰۰..۵۰۰۰
         val project = _selectedProject.value
         viewModelScope.launch(Dispatchers.IO) {
             val targetProject = if (project == null) {
@@ -724,23 +732,28 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun testKey(id: String) {
         viewModelScope.launch(Dispatchers.IO) {
-            val key = vaultManager.getDecryptedKey(id)
-            if (key.isNullOrBlank()) {
-                showSnackbar("کلید معتبر نیست.")
-                return@launch
-            }
+            _testingKeyId.value = id
             try {
-                ttsService.synthesizeSpeech(key, "تست اتصال کلید", "Kore")
-                vaultManager.recordSuccess(id)
-                showSnackbar("اتصال به سرویس صوتی گوگل موفقیت‌آمیز بود.")
-            } catch (e: TtsNetworkException) {
-                // BUG-03: خطای شبکه جریمهٔ کلید نیست — آمار کلید دست‌نخورده می‌ماند
-                showSnackbar("ارتباط شبکه برقرار نیست؛ اینترنت خود را بررسی کنید. (کلید شما جریمه نشد)")
-            } catch (e: kotlinx.coroutines.CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                vaultManager.recordError(id, isQuotaLimit = e.message?.contains("429") == true)
-                showSnackbar("خطا در تست کلید: ${e.message}")
+                val key = vaultManager.getDecryptedKey(id)
+                if (key.isNullOrBlank()) {
+                    showSnackbar("کلید معتبر نیست.")
+                    return@launch
+                }
+                try {
+                    ttsService.synthesizeSpeech(key, "تست اتصال کلید", "Kore")
+                    vaultManager.recordSuccess(id)
+                    showSnackbar("اتصال به سرویس صوتی گوگل موفقیت‌آمیز بود.")
+                } catch (e: TtsNetworkException) {
+                    // BUG-03: خطای شبکه جریمهٔ کلید نیست — آمار کلید دست‌نخورده می‌ماند
+                    showSnackbar("ارتباط شبکه برقرار نیست؛ اینترنت خود را بررسی کنید. (کلید شما جریمه نشد)")
+                } catch (e: kotlinx.coroutines.CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    vaultManager.recordError(id, isQuotaLimit = e.message?.contains("429") == true)
+                    showSnackbar("خطا در تست کلید: ${e.message}")
+                }
+            } finally {
+                _testingKeyId.value = null
             }
         }
     }
@@ -760,10 +773,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun setStorageFolder(folder: String) {
         userPreferences.updateStorageFolder(folder)
-    }
-
-    fun dismissRestartDialog() {
-        _showRestartDialog.value = false
     }
 
     fun resetSettingsToDefault() {

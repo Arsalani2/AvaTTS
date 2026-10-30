@@ -74,12 +74,10 @@ import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.ui.components.AudioPlayerBar
-import com.example.ui.components.RestartPromptDialog
 import com.example.ui.screens.LogsScreen
 import com.example.ui.screens.ProjectsScreen
 import com.example.ui.screens.SettingsScreen
 import com.example.ui.screens.StudioScreen
-import com.example.ui.screens.VaultScreen
 import com.example.ui.theme.AvaTtsTheme
 import com.example.ui.viewmodel.MainViewModel
 import kotlinx.coroutines.launch
@@ -105,12 +103,13 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             val settings by viewModel.settings.collectAsState()
-            val showRestartDialog by viewModel.showRestartDialog.collectAsState()
             val snackbarMessage by viewModel.snackbarMessage.collectAsState()
             val playerState by viewModel.playerState.collectAsState()
             val keys by viewModel.keys.collectAsState()
 
-            var currentTab by remember { mutableStateOf(AppTab.STUDIO) }
+            // BUG-25: تب فعال با rememberSaveable ذخیره می‌شود تا در بازآفرینی Activity به استودیو ریست نشود
+            var currentTabIndex by rememberSaveable { mutableStateOf(0) }
+            val currentTab = AppTab.entries.getOrElse(currentTabIndex) { AppTab.STUDIO }
             val snackbarHostState = remember { SnackbarHostState() }
             val saveableStateHolder = rememberSaveableStateHolder()
 
@@ -164,13 +163,12 @@ class MainActivity : ComponentActivity() {
 
             // Hoisted scroll states to preserve scroll position across tab switching (Requirement 5)
             val studioListState = rememberSaveable(saver = LazyListState.Saver) { LazyListState() }
-            val vaultListState = rememberSaveable(saver = LazyListState.Saver) { LazyListState() }
             val logsListState = rememberSaveable(saver = LazyListState.Saver) { LazyListState() }
             val settingsListState = rememberSaveable(saver = LazyListState.Saver) { LazyListState() }
 
             // Back button handling: if on secondary tab, return to Studio first
             BackHandler(enabled = currentTab != AppTab.STUDIO) {
-                currentTab = AppTab.STUDIO
+                currentTabIndex = AppTab.STUDIO.ordinal
             }
 
             // Snackbar listener
@@ -234,7 +232,7 @@ class MainActivity : ComponentActivity() {
                                         modifier = Modifier
                                             .padding(end = 12.dp)
                                             .clip(RoundedCornerShape(12.dp))
-                                            .clickable { currentTab = AppTab.SETTINGS }
+                                            .clickable { currentTabIndex = AppTab.SETTINGS.ordinal }
                                             .testTag("topbar_vault_badge")
                                     ) {
                                         Row(
@@ -279,11 +277,11 @@ class MainActivity : ComponentActivity() {
                                     tonalElevation = 6.dp,
                                     modifier = Modifier.testTag("main_bottom_nav")
                                 ) {
-                                    AppTab.values().forEach { tab ->
+                                    AppTab.entries.forEach { tab ->
                                         val isSelected = currentTab == tab
                                         NavigationBarItem(
                                             selected = isSelected,
-                                            onClick = { currentTab = tab },
+                                            onClick = { currentTabIndex = tab.ordinal },
                                             modifier = Modifier.testTag(tab.tag),
                                             icon = {
                                                 if (tab == AppTab.SETTINGS && keys.isEmpty()) {
@@ -322,20 +320,13 @@ class MainActivity : ComponentActivity() {
                                     AppTab.STUDIO -> StudioScreen(viewModel = viewModel, listState = studioListState)
                                     AppTab.PROJECTS -> ProjectsScreen(
                                         viewModel = viewModel,
-                                        onNavigateToStudio = { currentTab = AppTab.STUDIO }
+                                        onNavigateToStudio = { currentTabIndex = AppTab.STUDIO.ordinal }
                                     )
                                     AppTab.LOGS -> LogsScreen(viewModel = viewModel, listState = logsListState)
                                     AppTab.SETTINGS -> SettingsScreen(viewModel = viewModel, listState = settingsListState)
                                 }
                             }
                         }
-                    }
-
-                    // Theme Change Restart Prompt Dialog
-                    if (showRestartDialog) {
-                        RestartPromptDialog(
-                            onDismiss = { viewModel.dismissRestartDialog() }
-                        )
                     }
                 }
             }
