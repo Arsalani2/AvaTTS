@@ -92,6 +92,8 @@ class AudioPlayerManager(private val context: Context) {
             val player = MediaPlayer().apply {
                 setDataSource(audioPath)
                 setOnPreparedListener { mp ->
+                    // BUG-48: اطمینان از اینکه کال‌بک مربوط به همین پلیر فعال است و پلیر تعویض یا آزاد نشده
+                    if (mediaPlayer !== mp) return@setOnPreparedListener
                     try {
                         mp.start()
                         val duration = mp.duration.toLong().coerceAtLeast(0L)
@@ -105,17 +107,23 @@ class AudioPlayerManager(private val context: Context) {
                         )
                         startTicker()
                     } catch (e: Exception) {
-                        _playerState.value = PlayerState(error = "خطا در شروع پخش: ${e.message}")
+                        if (mediaPlayer === mp) {
+                            _playerState.value = PlayerState(error = "خطا در شروع پخش: ${e.message}")
+                        }
                     }
                 }
-                setOnCompletionListener {
+                setOnCompletionListener { mp ->
+                    // BUG-48: جلوگیری از بازنشانی وضعیت در صورتی که پلیر دیگری فعال شده است
+                    if (mediaPlayer !== mp) return@setOnCompletionListener
                     _playerState.value = _playerState.value.copy(
                         isPlaying = false,
                         currentPositionMs = 0L
                     )
                     stopTicker()
                 }
-                setOnErrorListener { _, what, extra ->
+                setOnErrorListener { mp, what, extra ->
+                    // BUG-48: نادیده گرفتن خطای پلیر قبلی پس از تعویض یا آزادسازی
+                    if (mediaPlayer !== mp) return@setOnErrorListener true
                     _playerState.value = PlayerState(
                         error = "خطا در پخش فایل صوتی (کد $what)"
                     )
@@ -204,6 +212,11 @@ class AudioPlayerManager(private val context: Context) {
         abandonAudioFocus()
         try {
             mediaPlayer?.let { mp ->
+                try {
+                    mp.setOnPreparedListener(null)
+                    mp.setOnCompletionListener(null)
+                    mp.setOnErrorListener(null)
+                } catch (_: Exception) {}
                 try {
                     if (mp.isPlaying) mp.stop()
                 } catch (_: Exception) {}
