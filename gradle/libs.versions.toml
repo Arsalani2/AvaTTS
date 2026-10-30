@@ -100,4 +100,4 @@ android-application = { id = "com.android.application", version.ref = "agp" }
 kotlin-compose = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
 google-devtools-ksp = { id = "com.google.devtools.ksp", version.ref = "googleDevtoolsKsp" }
 secrets = { id = "com.google.android.libraries.mapsplatform.secrets-gradle-plugin", version.ref = "secretsGradlePlugin" }
-// BUG-30: google-services حذف شد — Firebase در کد استفاده نمی‌شود
+# BUG-30: google-services حذف شد — Firebase در کد استفاده نمی‌شود
