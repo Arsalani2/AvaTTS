@@ -1,3 +1,5 @@
+import java.util.Properties
+
 plugins {
   alias(libs.plugins.android.application)
   alias(libs.plugins.kotlin.compose)
@@ -5,6 +7,16 @@ plugins {
   alias(libs.plugins.secrets)
   // BUG-30: پلاگین google-services حذف شد — هیچ کدی Firebase استفاده نمی‌کند
 }
+
+// BUG-45: خواندن مستقیم و ایمن نسخه از version.properties ریشه پروژه
+val versionPropsFile = rootProject.file("version.properties")
+val versionProps = Properties().apply {
+  if (versionPropsFile.exists()) {
+    versionPropsFile.inputStream().use { load(it) }
+  }
+}
+val appVersionCode = versionProps.getProperty("versionCode", "1").toInt()
+val appVersionName = versionProps.getProperty("versionName", "1.0")
 
 android {
   namespace = "com.example"
@@ -14,9 +26,9 @@ android {
     applicationId = "com.aistudio.applet.lnpwrs"
     minSdk = 24
     targetSdk = 36
-    // BUG-30: نسخه از version.properties ریشه خوانده می‌شود (هاردکد حذف)
-    versionCode = rootProject.extensions.extra.get("appVersionCode") as Int
-    versionName = rootProject.extensions.extra.get("appVersionName") as String
+    // BUG-45: نسخه از version.properties خوانده می‌شود
+    versionCode = appVersionCode
+    versionName = appVersionName
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
   }
