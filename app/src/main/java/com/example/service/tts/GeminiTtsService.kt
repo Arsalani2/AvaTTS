@@ -174,10 +174,22 @@ class GeminiTtsService {
                     }
 
                     override fun onResponse(call: Call, response: Response) {
-                        response.use {
-                            val body = it.body?.string().orEmpty()
+                        try {
+                            response.use {
+                                val body = it.body?.string().orEmpty()
+                                if (cont.isActive) {
+                                    cont.resumeWith(Result.success(Triple(body, it.code, it.isSuccessful)))
+                                }
+                            }
+                        } catch (e: Exception) {
+                            // BUG-46: در صورت بروز خطای I/O حین خواندن بدنه استریم، کوروتین با TtsNetworkException
+                            // رزومه می‌شود تا صف برای همیشه معلق نماند
                             if (cont.isActive) {
-                                cont.resumeWith(Result.success(Triple(body, it.code, it.isSuccessful)))
+                                cont.resumeWith(
+                                    Result.failure(
+                                        TtsNetworkException("خطا در خواندن داده‌های پاسخ از سرور: ${e.message}")
+                                    )
+                                )
                             }
                         }
                     }
