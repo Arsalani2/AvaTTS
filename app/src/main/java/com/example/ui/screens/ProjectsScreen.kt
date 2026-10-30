@@ -35,6 +35,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
@@ -78,6 +79,7 @@ fun ProjectsScreen(
     val projects by viewModel.projects.collectAsState()
     val selectedProject by viewModel.selectedProject.collectAsState()
     val allChunks by viewModel.allChunks.collectAsState()
+    val isMergingAudio by viewModel.isMergingAudio.collectAsState()
 
     var showCreateDialog by remember { mutableStateOf(false) }
     var projectToEdit by remember { mutableStateOf<ProjectEntity?>(null) }
@@ -184,6 +186,7 @@ fun ProjectsScreen(
                     totalChunks = totalCount,
                     completedChunks = completedCount,
                     isSelected = isSelected,
+                    isMergingAudio = isMergingAudio,
                     onSelect = {
                         viewModel.selectProject(project)
                         onNavigateToStudio()
@@ -407,6 +410,7 @@ fun ProjectCardItem(
     totalChunks: Int,
     completedChunks: Int,
     isSelected: Boolean,
+    isMergingAudio: Boolean = false,
     onSelect: () -> Unit,
     onEdit: () -> Unit,
     onDelete: () -> Unit,
@@ -620,17 +624,28 @@ fun ProjectCardItem(
                     // Merge WAV files button (Requirement 4: ادغام فایل‌های WAV به یک فایل کامل)
                     FilledTonalButton(
                         onClick = onMergeWav,
+                        enabled = !isMergingAudio,
                         shape = RoundedCornerShape(10.dp),
                         contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp),
                         modifier = Modifier.height(34.dp).testTag("btn_merge_wav_${project.id}")
                     ) {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Filled.CallMerge,
-                            contentDescription = null,
-                            modifier = Modifier.size(15.dp)
-                        )
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text("ادغام WAV", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                        if (isMergingAudio) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(14.dp),
+                                strokeWidth = 2.dp,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text("در حال ادغام...", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                        } else {
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Filled.CallMerge,
+                                contentDescription = null,
+                                modifier = Modifier.size(15.dp)
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text("ادغام WAV", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                        }
                     }
                 }
 

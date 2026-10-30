@@ -116,6 +116,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val _pendingResplitConfirmation = MutableStateFlow<Int?>(null)
     val pendingResplitConfirmation: StateFlow<Int?> = _pendingResplitConfirmation.asStateFlow()
 
+    // BUG-51: وضعیت لودینگ ادغام فایل‌های صوتی WAV پروژه و جلوگیری از کلیک مکرر
+    private val _isMergingAudio = MutableStateFlow(false)
+    val isMergingAudio: StateFlow<Boolean> = _isMergingAudio.asStateFlow()
+
     // User Feedback Toast/Snackbar message
     private val _snackbarMessage = MutableStateFlow<String?>(null)
     val snackbarMessage: StateFlow<String?> = _snackbarMessage.asStateFlow()
@@ -652,75 +656,90 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
      * Concatenates/merges all completed chunk WAV files for a project into {Project_Name} - merged.wav
      */
     fun mergeProjectAudio(project: ProjectEntity, onDone: ((File) -> Unit)? = null) {
+        if (_isMergingAudio.value) {
+            showSnackbar("عملیات ادغام در حال انجام است؛ لطفاً تا پایان صبر کنید.")
+            return
+        }
+        val currentQueue = queueEngine.queueState.value
+        if (currentQueue.isRunning && (currentQueue.activeProjectId == project.id || _selectedProject.value?.id == project.id)) {
+            showSnackbar("صف تبدیل این پروژه در حال اجراست؛ لطفاً پس از اتمام یا توقف صف، اقدام به ادغام کنید.")
+            return
+        }
+
+        _isMergingAudio.value = true
         viewModelScope.launch(Dispatchers.IO) {
-            val projectChunks = repository.getChunksDirect(project.id).sortedBy { it.chunkIndex }
-            val completedChunks = projectChunks.filter { it.status == ChunkEntity.STATUS_COMPLETED }
+            try {
+                val projectChunks = repository.getChunksDirect(project.id).sortedBy { it.chunkIndex }
+                val completedChunks = projectChunks.filter { it.status == ChunkEntity.STATUS_COMPLETED }
 
-            if (completedChunks.isEmpty()) {
-                showSnackbar("هیچ بخش صوتی تکمیل‌شده‌ای برای پروژه «${project.name}» یافت نشد.")
-                return@launch
-            }
-
-            val missingChunks = completedChunks.filter { chunk ->
-                val path = chunk.audioFilePath
-                path.isNullOrBlank() || !File(path).exists() || !File(path).isFile || File(path).length() <= 44
-            }
-            if (missingChunks.isNotEmpty()) {
-                // BUG-33: merge ناقص بدتر از عدم merge است — به‌جای حذف بی‌صدای فصل‌های گم‌شده،
-                // دقیقاً بگوییم کدام بخش‌ها فایل صوتی ندارند تا دوباره تبدیل شوند.
-                val missingIndices = missingChunks.map { it.chunkIndex }
-                val shown = if (missingIndices.size > 10) {
-                    missingIndices.take(10).joinToString("، ") + " و ${missingIndices.size - 10} مورد دیگر"
-                } else {
-                    missingIndices.joinToString("، ")
+                if (completedChunks.isEmpty()) {
+                    showSnackbar("هیچ بخش صوتی تکمیل‌شده‌ای برای پروژه «${project.name}» یافت نشد.")
+                    return@launch
                 }
-                showSnackbar("ادغام متوقف شد: بخش‌های $shown فایل صوتی ندارند. ابتدا آن‌ها را دوباره تبدیل کنید.")
-                return@launch
-            }
 
-            val audioFiles = completedChunks.mapNotNull { chunk ->
-                val path = chunk.audioFilePath
-                if (!path.isNullOrBlank()) {
-                    val f = File(path)
-                    if (f.exists() && f.isFile && f.length() > 44) f else null
-                } else null
-            }
-
-            if (audioFiles.isEmpty()) {
-                showSnackbar("فایل‌های صوتی بخش‌های تکمیل‌شده در حافظه یافت نشدند.")
-                return@launch
-            }
-
-            val outputFile = fileManager.getMergedAudioOutputFile(project.name, project.folderName)
-            showSnackbar("در حال ادغام ${audioFiles.size} فایل صوتی پروژه «${project.name}»...")
-
-            val result: Result<File> = WavAudioUtil.mergeWavFiles(audioFiles, outputFile)
-            val file: File? = result.getOrNull()
-            if (file != null) {
-                val sizeBytes = file.length()
-                val sizeStr = if (sizeBytes >= 1024 * 1024) {
-                    String.format(java.util.Locale.US, "%.2f مگابایت", sizeBytes.toDouble() / (1024 * 1024))
-                } else {
-                    "${sizeBytes / 1024} کیلوبایت"
+                val missingChunks = completedChunks.filter { chunk ->
+                    val path = chunk.audioFilePath
+                    path.isNullOrBlank() || !File(path).exists() || !File(path).isFile || File(path).length() <= 44
                 }
-                repository.logConversion(
-                    projectId = project.id,
-                    projectName = project.name,
-                    chunkIndex = 0,
-                    keyName = "سیستم",
-                    keyMasked = "---",
-                    status = "MERGED",
-                    httpCode = 200,
-                    latencyMs = 0L,
-                    message = "پروژه «${project.name}» همه فایل‌ها ادغام شد با حجم $sizeStr در مسیر ${file.absolutePath} ذخیره شد",
-                    filePath = file.absolutePath,
-                    fileSize = sizeBytes
-                )
-                showSnackbar("فایل‌های صوتی با موفقیت ادغام شدند: ${file.name}")
-                onDone?.invoke(file)
-            } else {
-                val err = result.exceptionOrNull()?.message ?: "خطای ناشناخته در ادغام"
-                showSnackbar("خطا در ادغام فایل‌های صوتی: $err")
+                if (missingChunks.isNotEmpty()) {
+                    // BUG-33: merge ناقص بدتر از عدم merge است — به‌جای حذف بی‌صدای فصل‌های گم‌شده،
+                    // دقیقاً بگوییم کدام بخش‌ها فایل صوتی ندارند تا دوباره تبدیل شوند.
+                    val missingIndices = missingChunks.map { it.chunkIndex }
+                    val shown = if (missingIndices.size > 10) {
+                        missingIndices.take(10).joinToString("، ") + " و ${missingIndices.size - 10} مورد دیگر"
+                    } else {
+                        missingIndices.joinToString("، ")
+                    }
+                    showSnackbar("ادغام متوقف شد: بخش‌های $shown فایل صوتی ندارند. ابتدا آن‌ها را دوباره تبدیل کنید.")
+                    return@launch
+                }
+
+                val audioFiles = completedChunks.mapNotNull { chunk ->
+                    val path = chunk.audioFilePath
+                    if (!path.isNullOrBlank()) {
+                        val f = File(path)
+                        if (f.exists() && f.isFile && f.length() > 44) f else null
+                    } else null
+                }
+
+                if (audioFiles.isEmpty()) {
+                    showSnackbar("فایل‌های صوتی بخش‌های تکمیل‌شده در حافظه یافت نشدند.")
+                    return@launch
+                }
+
+                val outputFile = fileManager.getMergedAudioOutputFile(project.name, project.folderName)
+                showSnackbar("در حال ادغام ${audioFiles.size} فایل صوتی پروژه «${project.name}»...")
+
+                val result: Result<File> = WavAudioUtil.mergeWavFiles(audioFiles, outputFile)
+                val file: File? = result.getOrNull()
+                if (file != null) {
+                    val sizeBytes = file.length()
+                    val sizeStr = if (sizeBytes >= 1024 * 1024) {
+                        String.format(java.util.Locale.US, "%.2f مگابایت", sizeBytes.toDouble() / (1024 * 1024))
+                    } else {
+                        "${sizeBytes / 1024} کیلوبایت"
+                    }
+                    repository.logConversion(
+                        projectId = project.id,
+                        projectName = project.name,
+                        chunkIndex = 0,
+                        keyName = "سیستم",
+                        keyMasked = "---",
+                        status = "MERGED",
+                        httpCode = 200,
+                        latencyMs = 0L,
+                        message = "پروژه «${project.name}» همه فایل‌ها ادغام شد با حجم $sizeStr در مسیر ${file.absolutePath} ذخیره شد",
+                        filePath = file.absolutePath,
+                        fileSize = sizeBytes
+                    )
+                    showSnackbar("فایل‌های صوتی با موفقیت ادغام شدند: ${file.name}")
+                    onDone?.invoke(file)
+                } else {
+                    val err = result.exceptionOrNull()?.message ?: "خطای ناشناخته در ادغام"
+                    showSnackbar("خطا در ادغام فایل‌های صوتی: $err")
+                }
+            } finally {
+                _isMergingAudio.value = false
             }
         }
     }
