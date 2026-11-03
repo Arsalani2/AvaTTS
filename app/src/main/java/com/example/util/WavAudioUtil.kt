@@ -233,8 +233,11 @@ object WavAudioUtil {
                         )
                     }
                 }
-                infos.add(f to info)
-                totalDataLen += info.dataSize
+                // BUG-54: ترازبندی dataSize به مضرب blockAlign تا در صورت چانک با اندازه فرد، فاز نمونه‌ها شیفت نخورد و نویز سفید ایجاد نشود
+                val align = info.blockAlign.toLong().coerceAtLeast(1L)
+                val alignedDataSize = info.dataSize - (info.dataSize % align)
+                infos.add(f to info.copy(dataSize = alignedDataSize))
+                totalDataLen += alignedDataSize
             }
 
             val b = baseInfo ?: return Result.failure(IllegalStateException("خطا در خواندن مشخصات صوتی."))
