@@ -4,7 +4,7 @@ object SmartTextChunker {
 
     private val SENTENCE_DELIMITERS = charArrayOf('.', '!', '?', '؟', '؛', '\n', ':')
     private val CLAUSE_DELIMITERS = charArrayOf('،', ',', ';', '-', '—')
-    private val CLOSING_PUNCTUATION = setOf('»', '"', ''', '’', '”', ')', ']', '}')
+    private val CLOSING_PUNCTUATION = setOf('»', '"', '\'', '’', '”', ')', ']', '}')
 
     /**
      * Splits text into natural semantic chunks close to targetSize characters.

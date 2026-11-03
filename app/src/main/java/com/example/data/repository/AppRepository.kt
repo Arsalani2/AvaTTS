@@ -45,6 +45,10 @@ class AppRepository(
         chunkDao.replaceChunksForProject(projectId, newChunks)
     }
 
+    suspend fun updateChunk(chunk: ChunkEntity) {
+        chunkDao.updateChunk(chunk)
+    }
+
     suspend fun updateProjectLock(projectId: Long, isLocked: Boolean) {
         projectDao.updateProjectLockStatus(projectId, isLocked)
     }
