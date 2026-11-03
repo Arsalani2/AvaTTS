@@ -568,12 +568,18 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             showSnackbar("لطفاً ابتدا پروژه را انتخاب یا ایجاد کنید.")
             return
         }
-        val ids = _selectedChunkIds.value.toList()
-        if (ids.isEmpty()) {
+        val selectedSet = _selectedChunkIds.value
+        if (selectedSet.isEmpty()) {
             showSnackbar("هیچ بخشی انتخاب نشده است.")
             return
         }
-        queueEngine.startQueue(project, ids) { completedId ->
+        // BUG-57: مرتب‌سازی قطعات انتخابی بر اساس chunkIndex تا صف همیشه با ترتیب طبیعی متن اجرا شود
+        val sortedIds = chunks.value
+            .filter { it.id in selectedSet }
+            .sortedBy { it.chunkIndex }
+            .map { it.id }
+        val idsToRun = if (sortedIds.isNotEmpty()) sortedIds else selectedSet.toList()
+        queueEngine.startQueue(project, idsToRun) { completedId ->
             deselectChunk(completedId)
         }
     }
