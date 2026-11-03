@@ -1,0 +1,69 @@
+name: Unit Tests (no release)
+
+# فقط تست و کامپایل را اجرا می‌کند؛ هیچ نسخه‌ای bump یا منتشر نمی‌شود.
+# فیکس‌های [skip ci] چشم‌انداز بیلد ندارند و خطای کامپایل فقط در ران ریلیز
+# پیدا می‌شد (درس ران #4 AvaTTS) — این ورک‌فلو همان خطا را همان شب آشکار می‌کند.
+on:
+  workflow_dispatch:
+  pull_request:
+    branches: [main]
+  push:
+    branches:
+      - main
+      - 'fix/**'
+      - 'ci/**'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: unit-tests-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Run Unit Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v7
+
+      - name: Set up JDK 17 (Temurin)
+        uses: actions/setup-java@v6
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Setup Gradle (pinned to wrapper version)
+        uses: gradle/actions/setup-gradle@v6
+        with:
+          # ریپو اسکریپت gradlew ندارد؛ نسخهٔ Gradle باید دقیقاً با
+          # gradle/wrapper/gradle-wrapper.properties هم‌تراز بماند.
+          gradle-version: '9.3.1'
+
+      - name: Run Unit Tests
+        run: |
+          # pipefail + tee: خطای واقعی Gradle در annotations ظاهر می‌شود (درس ران #37 وام‌یار)
+          set -o pipefail
+          gradle testDebugUnitTest --stacktrace --continue 2>&1 | tee gradle-test.log
+
+      - name: Summarize Test Failures
+        if: failure()
+        run: |
+          echo "::error::مرحلهٔ تست/کامپایل شکست خورد — خلاصهٔ خطاها در annotations و آرتیفکت لاگ"
+          grep -n -E "^e: |What went wrong|Execution failed|Caused by|FAILURE:|FAILED$| tests completed|OutOfMemory|disappeared|Daemon" gradle-test.log 2>&1 | head -40 \
+            | while IFS= read -r line; do echo "::error::${line:0:850}"; done
+
+      - name: Upload Test Reports
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: unit-test-reports
+          path: |
+            gradle-test.log
+            app/build/reports/tests/**
+            app/build/test-results/**
+          if-no-files-found: warn
+          retention-days: 14

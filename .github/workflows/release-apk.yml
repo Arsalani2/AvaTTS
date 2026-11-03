@@ -1,5 +1,7 @@
 name: Build & Release APK
 
+# ورک‌فلوی ریلیز AvaTTS — فقط با پوش تگ v* یا اجرای دستی (workflow_dispatch) تریگر می‌شود.
+# پوش معمولی به main هیچ ریلیزی نمی‌سازد (تست/کامپایل روی main کارِ unit-tests.yml است).
 on:
   push:
     tags:
@@ -7,83 +9,184 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: 'Release tag to create/update (e.g. v1.0.1)'
+        description: 'تگ ریلیز (مثل v1.0.4) — فقط با قالب vMAJOR.MINOR.PATCH'
         required: true
-        default: 'v1.0.1'
 
 permissions:
   contents: write
 
+# جلوگیری از برخورد دو ریلیز همزمان؛ ران در جریان را قطع نمی‌کند
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
   build-and-release:
-    name: Build Signed Release APK
+    name: Build Signed Release (APK & AAB)
     runs-on: ubuntu-latest
+    timeout-minutes: 45
 
     steps:
       - name: Checkout Code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
-      - name: Set up JDK 17
-        uses: actions/setup-java@v4
+      - name: Set up JDK 17 (Temurin)
+        uses: actions/setup-java@v6
         with:
           distribution: 'temurin'
           java-version: '17'
 
-      - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v3
+      - name: Setup Gradle (pinned to wrapper version)
+        uses: gradle/actions/setup-gradle@v6
         with:
+          # ریپو اسکریپت gradlew ندارد؛ نسخهٔ Gradle باید دقیقاً با
+          # gradle/wrapper/gradle-wrapper.properties هم‌تراز بماند.
           gradle-version: '9.3.1'
 
-      - name: Cache Gradle Packages
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.gradle/caches
-            ~/.gradle/wrapper
-          key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/*.gradle.kts', 'gradle/libs.versions.toml', 'gradle/wrapper/gradle-wrapper.properties') }}
-          restore-keys: |
-            ${{ runner.os }}-gradle-
-
-      - name: Decode Keystore from Secret
+      - name: Check Gradle version alignment with wrapper
         run: |
-          if [ -z "${{ secrets.KEYSTORE_BASE64 }}" ]; then
-            echo "::error::KEYSTORE_BASE64 secret is empty or missing! Please configure it in Repository Secrets."
+          # چون build با دستور gradle (نه ./gradlew) اجرا می‌شود، این گارد
+          # هشدار می‌دهد اگر روزی wrapper ارتقا پیدا کرد ولی این ورک‌فلو نه.
+          WRAPPER_VER=$(grep distributionUrl gradle/wrapper/gradle-wrapper.properties | sed -E 's|.*/gradle-([0-9.]+)-bin\.zip.*|\1|')
+          if [ "$WRAPPER_VER" != "9.3.1" ]; then
+            echo "::warning::نسخهٔ Gradle ورک‌فلو (9.3.1) با wrapper ($WRAPPER_VER) هم‌تراز نیست — gradle-version این ورک‌فلو را به‌روز کنید"
+          else
+            echo "Gradle ورک‌فلو با wrapper هم‌تراز است: $WRAPPER_VER ✓"
+          fi
+
+      - name: Read version.properties
+        run: |
+          VERSION_NAME=$(grep "^versionName=" version.properties | cut -d= -f2 | tr -d '\r')
+          VERSION_CODE=$(grep "^versionCode=" version.properties | cut -d= -f2 | tr -d '\r')
+          if [ -z "$VERSION_NAME" ] || [ -z "$VERSION_CODE" ]; then
+            echo "::error::versionName/versionCode در version.properties پیدا نشد"
             exit 1
           fi
-          echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 --decode > "${{ github.workspace }}/AvaTTS.jks"
-          echo "Keystore decoded successfully. Size: $(stat -c%s "${{ github.workspace }}/AvaTTS.jks") bytes"
+          echo "APP_VERSION_NAME=$VERSION_NAME" >> $GITHUB_ENV
+          echo "APP_VERSION_CODE=$VERSION_CODE" >> $GITHUB_ENV
+          echo "RELEASE_DATE=$(date '+%Y-%m-%d')" >> $GITHUB_ENV
+          echo "نسخهٔ در حال انتشار: $VERSION_NAME (code $VERSION_CODE)"
+
+      - name: Resolve release tag
+        env:
+          RELEASE_TAG_INPUT: ${{ inputs.tag }}
+        run: |
+          if [ "${{ github.ref_type }}" = "tag" ]; then
+            TAG="${{ github.ref_name }}"
+          else
+            TAG="$RELEASE_TAG_INPUT"
+            if ! printf '%s' "$TAG" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+$'; then
+              echo "::error::تگ «$TAG» معتبر نیست — قالب درست: vMAJOR.MINOR.PATCH (مثل v1.0.4)"
+              exit 1
+            fi
+          fi
+          echo "RELEASE_TAG=$TAG" >> $GITHUB_ENV
+          echo "تگ ریلیز: $TAG"
+
+      - name: Decode Keystore from Secret
+        env:
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+        run: |
+          if [ -z "$KEYSTORE_BASE64" ]; then
+            echo "::error::سکرت KEYSTORE_BASE64 تنظیم نشده است — در Repository Secrets تنظیمش کنید"
+            exit 1
+          fi
+          # سکرت‌ها فقط از مسیر env به اسکریپت می‌رسند (نه interpolation مستقیم در run)
+          printf '%s' "$KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/AvaTTS.jks"
+          if [ ! -s "$RUNNER_TEMP/AvaTTS.jks" ]; then
+            echo "::error::خروجی decode کی‌استور خالی است"
+            exit 1
+          fi
+          echo "کی‌استور decode شد: $(stat -c%s "$RUNNER_TEMP/AvaTTS.jks") بایت"
 
       - name: Setup Google Services Config
+        env:
+          GOOGLE_SERVICES_JSON: ${{ secrets.GOOGLE_SERVICES_JSON }}
         run: |
-          if [ -n "${{ secrets.GOOGLE_SERVICES_JSON }}" ]; then
-            echo "${{ secrets.GOOGLE_SERVICES_JSON }}" > app/google-services.json
+          # پلاگین google-services حذف شده (BUG-30)؛ فقط برای سازگاری،
+          # اگر سکرت تنظیم شده باشد نوشته می‌شود.
+          if [ -n "$GOOGLE_SERVICES_JSON" ]; then
+            printf '%s' "$GOOGLE_SERVICES_JSON" > app/google-services.json
+            echo "google-services.json نوشته شد"
+          else
+            echo "سکرت GOOGLE_SERVICES_JSON تنظیم نشده — رد شد"
           fi
 
-      - name: Build Release APK
+      - name: Run Unit Tests
+        run: |
+          # درس ران #37 وام‌یار: شکست بدون لاگ = کاملاً کور؛
+          # pipefail + tee تا خطای واقعی Gradle در annotations بیاید.
+          set -o pipefail
+          gradle testDebugUnitTest --stacktrace --continue 2>&1 | tee gradle-test.log
+
+      - name: Build Release APK & AAB
         env:
-          KEYSTORE_FILE: ${{ github.workspace }}/AvaTTS.jks
+          KEYSTORE_FILE: ${{ runner.temp }}/AvaTTS.jks
           KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
           KEY_ALIAS: ${{ secrets.KEY_ALIAS || 'AvaTTS' }}
           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
         run: |
-          gradle assembleRelease --stacktrace
+          set -o pipefail
+          gradle bundleRelease assembleRelease --stacktrace 2>&1 | tee gradle-build.log
 
-      - name: Upload APK as workflow artifact
-        uses: actions/upload-artifact@v4
+      - name: Summarize Build Failure
+        if: failure()
+        run: |
+          # خطای واقعی Gradle به‌صورت annotation بالای ران ظاهر می‌شود
+          # تا بدون باز کردن لاگ خام، علت شکست مشخص باشد.
+          for LOG in gradle-test.log gradle-build.log; do
+            if [ -f "$LOG" ]; then
+              grep -n -E "^e: |What went wrong|Execution failed|Caused by|FAILURE:|FAILED$|OutOfMemory|disappeared|Daemon" "$LOG" | head -25 \
+                | while IFS= read -r line; do echo "::error::${LOG}: ${line:0:850}"; done
+            fi
+          done
+          if [ -f gradle-build.log ]; then
+            sed -n '/What went wrong/,/Try:/p' gradle-build.log | head -25 | tr '\n' ' ' | cut -c1-1700 \
+              | while IFS= read -r line; do echo "::error title=Gradle failure::${line}"; done
+          fi
+
+      - name: Upload build outputs as workflow artifact
+        uses: actions/upload-artifact@v7
         with:
-          name: AvaTTS-release-apk
-          path: app/build/outputs/apk/release/*.apk
+          name: avatts-release-${{ env.APP_VERSION_NAME }}
+          path: |
+            app/build/outputs/apk/release/*.apk
+            app/build/outputs/bundle/release/*.aab
           if-no-files-found: error
+          retention-days: 30
 
-      - name: Upload APK to GitHub Release
-        uses: softprops/action-gh-release@v2
+      - name: Upload APK & AAB to GitHub Release
+        uses: softprops/action-gh-release@v3
         with:
-          tag_name: ${{ github.ref_type == 'tag' && github.ref_name || inputs.tag }}
+          tag_name: ${{ env.RELEASE_TAG }}
           target_commitish: ${{ github.sha }}
-          files: app/build/outputs/apk/release/*.apk
+          name: AvaTTS ${{ env.RELEASE_TAG }}
+          body: |
+            ## 🚀 انتشار نسخهٔ جدید AvaTTS ${{ env.RELEASE_TAG }}
+
+            - **Version Name:** `${{ env.APP_VERSION_NAME }}`
+            - **Version Code:** `${{ env.APP_VERSION_CODE }}`
+            - **تاریخ انتشار:** ${{ env.RELEASE_DATE }}
+
+            ### 📦 فایل‌های پیوست این انتشار:
+            1. **`app-release.apk`** — فایل نصبی مستقیم برای دستگاه‌های اندرویدی.
+            2. **`app-release.aab`** — بستهٔ Android App Bundle برای انتشار در گوگل پلی.
+          files: |
+            app/build/outputs/apk/release/*.apk
+            app/build/outputs/bundle/release/*.aab
           fail_on_unmatched_files: true
           generate_release_notes: true
           draft: false
           prerelease: false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Secure Cleanup of Keystore
+        if: always()
+        run: |
+          if [ -f "$RUNNER_TEMP/AvaTTS.jks" ]; then
+            rm -f "$RUNNER_TEMP/AvaTTS.jks"
+            echo "AvaTTS.jks امن حذف شد."
+          else
+            echo "فایل کی‌استور موجود نیست (یا قبلاً حذف شده)."
+          fi
