@@ -150,6 +150,24 @@ class FileManager(
         }
     }
 
+    /**
+     * BUG-55: تغییر نام پوشه پروژه در حافظه جهت جلوگیری از نشت دیسک و پراکندگی فایل‌ها
+     */
+    fun renameProjectFolder(oldProjectName: String, newProjectName: String, customRoot: String? = null): Boolean {
+        return try {
+            val root = getRootTtsDirectory(customRoot)
+            val oldDir = File(root, sanitizeFileName(oldProjectName))
+            val newDir = File(root, sanitizeFileName(newProjectName))
+            if (oldDir.exists() && oldDir != newDir) {
+                oldDir.renameTo(newDir)
+            } else {
+                true
+            }
+        } catch (e: Exception) {
+            false
+        }
+    }
+
     companion object {
         /**
          * Opens a file or its parent folder in the device's default File Manager or Audio Player.

@@ -273,6 +273,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun updateProjectDetails(name: String, description: String) {
         val current = _selectedProject.value ?: return
+        val currentQueue = queueEngine.queueState.value
+        if (currentQueue.isRunning && (currentQueue.activeProjectId == current.id || _selectedProject.value?.id == current.id)) {
+            showSnackbar("عملیات ممکن نیست؛ صف تبدیل این پروژه در حال اجراست.")
+            return
+        }
         viewModelScope.launch(Dispatchers.IO) {
             val oldName = current.name
             val newName = name.ifBlank { current.name }
@@ -281,10 +286,32 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 description = description,
                 updatedAt = System.currentTimeMillis()
             )
+            // BUG-55: تغییر نام پوشه فیزیکی و به‌روزرسانی مسیر صوتی قطعات در دیتابیس
+            if (oldName != newName) {
+                val oldDir = fileManager.getProjectDirectory(oldName, current.folderName)
+                val newDir = fileManager.getProjectDirectory(newName, current.folderName)
+                if (oldDir.exists() && oldDir != newDir) {
+                    val renamed = oldDir.renameTo(newDir)
+                    if (renamed) {
+                        try {
+                            repository.getChunksDirect(current.id).forEach { ch ->
+                                ch.audioFilePath?.let { oldPath ->
+                                    if (oldPath.startsWith(oldDir.absolutePath)) {
+                                        val newPath = oldPath.replace(oldDir.absolutePath, newDir.absolutePath)
+                                        repository.updateChunk(ch.copy(audioFilePath = newPath))
+                                    }
+                                }
+                            }
+                        } catch (e: Exception) {
+                            android.util.Log.w("MainViewModel", "Failed to update chunk audio paths after rename", e)
+                        }
+                    }
+                }
+            }
             repository.saveProject(updated)
             _selectedProject.value = updated
             if (oldName != newName) {
-                val timeSdf = java.text.SimpleDateFormat("yyyy/MM/dd ساعت HH:mm", java.util.Locale.getDefault())
+                val timeSdf = java.text.SimpleDateFormat("yyyy/MM/dd ساعت HH:mm", java.util.Locale.US)
                 val dateStr = timeSdf.format(java.util.Date(updated.updatedAt))
                 repository.logConversion(
                     projectId = current.id,
@@ -307,6 +334,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         if (currentQueue.isRunning && (currentQueue.activeProjectId == project.id || _selectedProject.value?.id == project.id)) {
             showSnackbar("عملیات ممکن نیست؛ صف تبدیل این پروژه در حال اجراست. ابتدا صف را متوقف کنید.")
             return
+        }
+        // BUG-55: توقف پخش صوت در صورت فعال بودن برای آزادسازی قفل فایل‌ها و جلوگیری از کرش مدیاپلیر
+        val currentPlay = playerManager.playerState.value
+        if (currentPlay.isPlaying || currentPlay.currentChunkId != null) {
+            playerManager.stop()
         }
         viewModelScope.launch(Dispatchers.IO) {
             // BUG-06: پوشهٔ صوتی پروژه نباید orphan بماند — فایلها + پوشه best-effort
