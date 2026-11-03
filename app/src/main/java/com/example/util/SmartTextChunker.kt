@@ -4,6 +4,7 @@ object SmartTextChunker {
 
     private val SENTENCE_DELIMITERS = charArrayOf('.', '!', '?', '؟', '؛', '\n', ':')
     private val CLAUSE_DELIMITERS = charArrayOf('،', ',', ';', '-', '—')
+    private val CLOSING_PUNCTUATION = setOf('»', '"', ''', '’', '”', ')', ']', '}')
 
     /**
      * Splits text into natural semantic chunks close to targetSize characters.
@@ -33,10 +34,15 @@ object SmartTextChunker {
             var splitIndex = -1
 
             for (i in end - 1 downTo searchWindowStart) {
-                // BUG-11: مرز فقط با اعتبارسنجی واقعی پذیرفته می‌شود —
-                // نقطهٔ اعشار (3.14)، ساعت (12:30)، URL و ایمیل دیگر جمله را نمی‌شکنند
+                // BUG-11 & BUG-58: مرز فقط با اعتبارسنجی واقعی پذیرفته می‌شود —
+                // نقطهٔ اعشار (3.14)، ساعت (12:30)، URL و ایمیل دیگر جمله را نمی‌شکنند؛
+                // همچنین پرانتز و گیومهٔ پایانی جمله به همین چانک ضمیمه می‌شوند.
                 if (trimmed[i] in SENTENCE_DELIMITERS && isSentenceBoundary(trimmed, i)) {
-                    splitIndex = i + 1
+                    var boundaryEnd = i + 1
+                    while (boundaryEnd < trimmed.length && trimmed[boundaryEnd] in CLOSING_PUNCTUATION) {
+                        boundaryEnd++
+                    }
+                    splitIndex = boundaryEnd
                     break
                 }
             }
@@ -89,10 +95,15 @@ object SmartTextChunker {
      */
     private fun isSentenceBoundary(text: String, index: Int): Boolean {
         val ch = text[index]
-        if (ch == '\n' || ch == '!' || ch == '?' || ch == '؟') return true
-        val next = text.getOrNull(index + 1)
-        val prev = text.getOrNull(index - 1)
+        if (ch == '\n') return true
+        var afterIndex = index + 1
+        while (afterIndex < text.length && text[afterIndex] in CLOSING_PUNCTUATION) {
+            afterIndex++
+        }
+        val next = text.getOrNull(afterIndex)
         if (next != null && !Character.isWhitespace(next)) return false
+        if (ch == '!' || ch == '?' || ch == '؟') return true
+        val prev = text.getOrNull(index - 1)
         if (prev != null && prev.isDigit()) return false
         var s = index
         while (s > 0 && !Character.isWhitespace(text[s - 1])) s--

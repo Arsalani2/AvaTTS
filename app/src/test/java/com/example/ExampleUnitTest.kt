@@ -36,6 +36,15 @@ class ExampleUnitTest {
     }
 
     @Test
+    fun testSmartTextChunker_sentenceEndingWithQuotes() {
+        val sampleText = "او گفت: «این یک جمله کامل و بسیار زیباست.» بخش دوم در اینجا شروع می‌شود."
+        val chunks = SmartTextChunker.chunkText(sampleText, 45)
+        assertTrue(chunks.size >= 2)
+        assertTrue("بخش اول باید گیومه بسته را همراه داشته باشد", chunks[0].endsWith("»"))
+        assertFalse("بخش دوم نباید با گیومه بسته شروع شود", chunks[1].startsWith("»"))
+    }
+
+    @Test
     fun testWavAudioUtil_ensureWavFormat() {
         // Raw dummy PCM 16-bit mono 24kHz (480 bytes = 10ms)
         val rawPcm = ByteArray(480) { (it % 128).toByte() }
