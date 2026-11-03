@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -167,9 +168,10 @@ fun VoiceSquareCard(
     }
 
     Card(
+        // BUG-62: استفاده از heightIn(min = 130.dp) جهت جلوگیری از بریدگی در مقیاس‌های فونت درشت (Accessibility)
         modifier = Modifier
             .width(130.dp)
-            .height(130.dp)
+            .heightIn(min = 130.dp)
             .clickable(onClick = onClick)
             .testTag("voice_card_${voice.name.lowercase()}"),
         shape = RoundedCornerShape(16.dp),
@@ -179,8 +181,9 @@ fun VoiceSquareCard(
     ) {
         Box(
             modifier = Modifier
-                .fillMaxSize()
-                .padding(10.dp)
+                .fillMaxWidth()
+                .heightIn(min = 130.dp)
+                .padding(8.dp)
         ) {
             if (isSelected) {
                 Icon(
@@ -194,7 +197,10 @@ fun VoiceSquareCard(
             }
 
             Column(
-                modifier = Modifier.fillMaxSize(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .align(Alignment.Center)
+                    .padding(vertical = 4.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.Center
             ) {
