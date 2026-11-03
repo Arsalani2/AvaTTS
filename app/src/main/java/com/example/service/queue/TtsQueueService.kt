@@ -7,6 +7,7 @@ import android.app.PendingIntent
 import android.app.Service
 import android.content.Context
 import android.content.Intent
+import android.content.pm.ServiceInfo
 import android.graphics.Color
 import android.os.Build
 import android.os.IBinder
@@ -78,7 +79,16 @@ class TtsQueueService : Service() {
                     errorCount = errorCount,
                     cooldownSec = cooldownSec
                 )
-                startForeground(NOTIFICATION_ID_FOREGROUND, notification)
+                // BUG-53: در اندروید ۱۴+ (API 34+) به دلیل targetSdk 36، مشخص‌کردن نوع سرویس پیش‌زمینه اجباری است
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                    startForeground(
+                        NOTIFICATION_ID_FOREGROUND,
+                        notification,
+                        ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC
+                    )
+                } else {
+                    startForeground(NOTIFICATION_ID_FOREGROUND, notification)
+                }
                 acquireWakeLock()
             }
             ACTION_STOP -> {
