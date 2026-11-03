@@ -313,11 +313,14 @@ class ApiKeyVaultManager(private val context: Context) {
         persistKeys(current)
     }
 
-    // BUG-23: شمارش کلیدهایی که پس از بکاپ/انتقال به دستگاه دیگر قابل رمزگشایی نیستند
+    // BUG-23 & BUG-59: شمارش کلیدهایی که پس از بکاپ/انتقال به دستگاه دیگر قابل رمزگشایی نیستند
+    // کلیدهای خام سالم قدیمی (شروع با AIzaSy) که مکانیزم خودترمیمی دارند نباید غیرقابل رمزگشایی به حساب آیند
     @Synchronized
     fun detectUndecryptableEntries(): Int {
         return _keys.value.count { item ->
-            item.encryptedKey.isNotBlank() && KeystoreHelper.decrypt(item.encryptedKey).isBlank()
+            item.encryptedKey.isNotBlank() &&
+                    !item.encryptedKey.startsWith("AIzaSy") &&
+                    KeystoreHelper.decrypt(item.encryptedKey).isBlank()
         }
     }
 }
