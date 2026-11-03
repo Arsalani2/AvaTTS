@@ -254,7 +254,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             if (text.isNotBlank()) {
                 generateAndSaveChunks(fullProject, text, size)
             }
-            val timeSdf = java.text.SimpleDateFormat("yyyy/MM/dd ساعت HH:mm", java.util.Locale.getDefault())
+            val timeSdf = java.text.SimpleDateFormat("yyyy/MM/dd ساعت HH:mm", java.util.Locale.US)
             val dateStr = timeSdf.format(java.util.Date(fullProject.createdAt))
             repository.logConversion(
                 projectId = id,

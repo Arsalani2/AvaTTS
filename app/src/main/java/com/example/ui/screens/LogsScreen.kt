@@ -508,6 +508,7 @@ private fun extractPathFromMessage(message: String): String? {
 }
 
 private fun formatLogDateTime(timestamp: Long): String {
-    val sdf = SimpleDateFormat("yyyy/MM/dd HH:mm:ss", Locale.getDefault())
+    // BUG-52 / BUG-63: استفاده از Locale.US برای جلوگیری از وارونگی ارقام و اسلش‌ها در چیدمان راست‌به‌چپ (RTL)
+    val sdf = SimpleDateFormat("yyyy/MM/dd HH:mm:ss", Locale.US)
     return sdf.format(Date(timestamp))
 }

@@ -665,6 +665,7 @@ fun ProjectCardItem(
 }
 
 private fun formatDate(timestamp: Long): String {
-    val sdf = SimpleDateFormat("yyyy/MM/dd HH:mm", Locale.getDefault())
+    // BUG-52 / BUG-63: استفاده از Locale.US برای حفظ ترتیب استاندارد تاریخ و ساعت در چیدمان RTL
+    val sdf = SimpleDateFormat("yyyy/MM/dd HH:mm", Locale.US)
     return sdf.format(Date(timestamp))
 }
