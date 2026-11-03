@@ -115,6 +115,7 @@ fun SettingsScreen(
     val testingKeyId by viewModel.testingKeyId.collectAsState()
 
     var showResetDialog by remember { mutableStateOf(false) }
+    var showClearLogsDialog by remember { mutableStateOf(false) }
 
     // Vault Dialog states
     var showAddKeyDialog by remember { mutableStateOf(false) }
@@ -941,6 +942,53 @@ fun SettingsScreen(
                 Column(modifier = Modifier.fillMaxWidth().padding(16.dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Icon(
+                            imageVector = Icons.Default.Delete,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.error,
+                            modifier = Modifier.size(20.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = "پاکسازی تاریخچه گزارش‌ها",
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.error
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Text(
+                        text = "کلیه لاگ‌ها و وقایع ثبت‌شده در سربرگ گزارش‌ها را به صورت کامل حذف می‌کند.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    OutlinedButton(
+                        onClick = { showClearLogsDialog = true },
+                        shape = RoundedCornerShape(10.dp),
+                        colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error),
+                        modifier = Modifier.testTag("btn_clear_all_logs")
+                    ) {
+                        Text("پاکسازی تمام گزارش‌ها")
+                    }
+                }
+            }
+        }
+        item {
+            Spacer(modifier = Modifier.height(12.dp))
+        }
+        item {
+            Card(
+                shape = RoundedCornerShape(20.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(modifier = Modifier.fillMaxWidth().padding(16.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
                             imageVector = Icons.Default.Restore,
                             contentDescription = null,
                             tint = MaterialTheme.colorScheme.error,
@@ -1130,6 +1178,32 @@ fun SettingsScreen(
             },
             dismissButton = {
                 OutlinedButton(onClick = { showResetDialog = false }) {
+                    Text("انصراف")
+                }
+            }
+        )
+    }
+
+    if (showClearLogsDialog) {
+        AlertDialog(
+            onDismissRequest = { showClearLogsDialog = false },
+            shape = RoundedCornerShape(20.dp),
+            title = { Text("پاکسازی تمام گزارش‌ها", fontWeight = FontWeight.Bold) },
+            text = { Text("آیا مطمئن هستید که می‌خواهید تمام لاگ‌ها و تاریخچه رویدادها را حذف کنید؟ این عملیات غیرقابل بازگشت است.") },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        viewModel.clearLogs()
+                        showClearLogsDialog = false
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
+                    modifier = Modifier.testTag("btn_confirm_clear_logs")
+                ) {
+                    Text("بله، پاکسازی کن")
+                }
+            },
+            dismissButton = {
+                OutlinedButton(onClick = { showClearLogsDialog = false }) {
                     Text("انصراف")
                 }
             }

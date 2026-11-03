@@ -850,13 +850,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         showSnackbar("تنظیمات به حالت پیش‌فرض بازگشت.")
     }
 
-    fun clearLogs() {
-        viewModelScope.launch(Dispatchers.IO) {
-            repository.clearLogs()
-            showSnackbar("کلیه لاگ‌ها پاکسازی شدند.")
-        }
-    }
-
     fun updateTtsModel(modelName: String) {
         // BUG-04: پیش‌فرض با UserPreferences یکی شد (gemini-2.5-flash-preview-tts) — یک source of truth
         val trimmed = modelName.trim().ifBlank { "gemini-2.5-flash-preview-tts" }
