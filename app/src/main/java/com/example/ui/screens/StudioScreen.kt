@@ -1592,10 +1592,13 @@ fun ProjectProgressChartCard(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         items(chunks, key = { it.id }) { chunk ->
+                            val pendingBg = MaterialTheme.colorScheme.surfaceVariant
+                            val pendingBorder = MaterialTheme.colorScheme.outline.copy(alpha = 0.5f)
+                            val pendingText = MaterialTheme.colorScheme.onSurfaceVariant
                             val (bgColor, borderColor, textColor) = when (chunk.status) {
                                 ChunkEntity.STATUS_COMPLETED -> Triple(Color(0xFF10B981), Color(0xFF059669), Color.White)
                                 ChunkEntity.STATUS_FAILED -> Triple(Color(0xFFEF4444), Color(0xFFDC2626), Color.White)
-                                else -> Triple(Color(0xFFF1F5F9), Color(0xFFCBD5E1), Color(0xFF475569))
+                                else -> Triple(pendingBg, pendingBorder, pendingText)
                             }
 
                             Box(
@@ -1620,7 +1623,7 @@ fun ProjectProgressChartCard(
 
                     Spacer(modifier = Modifier.height(10.dp))
                     Text(
-                        text = "الگوی قطعات: سبز (تکمیل) • سفید/طوسی (در انتظار) • قرمز (خطا)",
+                        text = "الگوی قطعات: سبز (تکمیل) • خنثی (در انتظار) • قرمز (خطا)",
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -1637,18 +1640,21 @@ fun ProjectProgressChartCard(
                         contentAlignment = Alignment.Center
                     ) {
                         val strokeWidth = 14.dp
+                        val trackColor = MaterialTheme.colorScheme.surfaceVariant
                         Canvas(modifier = Modifier.fillMaxSize().padding(8.dp)) {
-                            val stroke = Stroke(width = strokeWidth.toPx(), cap = StrokeCap.Round)
                             val completedAngle = if (totalCount > 0) (completedCount.toFloat() / totalCount) * 360f else 0f
                             val failedAngle = if (totalCount > 0) (failedCount.toFloat() / totalCount) * 360f else 0f
+                            val isFullOrNearFull = completedAngle >= 359f || (completedAngle + failedAngle >= 359f)
+                            val arcCap = if (isFullOrNearFull) StrokeCap.Butt else StrokeCap.Round
+                            val stroke = Stroke(width = strokeWidth.toPx(), cap = arcCap)
 
-                            // Background / pending arc (White / Light neutral)
+                            // Background / pending arc (Dynamic neutral theme color with Butt cap for 360deg circle)
                             drawArc(
-                                color = Color(0xFFE2E8F0),
+                                color = trackColor,
                                 startAngle = -90f,
                                 sweepAngle = 360f,
                                 useCenter = false,
-                                style = stroke
+                                style = Stroke(width = strokeWidth.toPx(), cap = StrokeCap.Butt)
                             )
 
                             // Error arc (Red)
@@ -1697,7 +1703,13 @@ fun ProjectProgressChartCard(
                             Text(text = "تکمیل شده: $completedCount", style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.SemiBold)
                         }
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            Box(modifier = Modifier.size(12.dp).clip(CircleShape).background(Color(0xFFCBD5E1)))
+                            Box(
+                                modifier = Modifier
+                                    .size(12.dp)
+                                    .clip(CircleShape)
+                                    .background(MaterialTheme.colorScheme.surfaceVariant)
+                                    .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.5f), CircleShape)
+                            )
                             Spacer(modifier = Modifier.width(8.dp))
                             Text(text = "در انتظار: $pendingCount", style = MaterialTheme.typography.bodySmall)
                         }
