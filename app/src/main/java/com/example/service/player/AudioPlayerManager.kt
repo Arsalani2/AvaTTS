@@ -36,7 +36,10 @@ class AudioPlayerManager(private val context: Context) {
     @SuppressWarnings("deprecation") // requestAudioFocus ساده برای minSdk 24 کفایت می‌کند
     private val audioFocusListener = AudioManager.OnAudioFocusChangeListener { focusChange ->
         when (focusChange) {
-            AudioManager.AUDIOFOCUS_LOSS,
+            AudioManager.AUDIOFOCUS_LOSS -> {
+                hasAudioFocus = false
+                pause()
+            }
             AudioManager.AUDIOFOCUS_LOSS_TRANSIENT,
             AudioManager.AUDIOFOCUS_LOSS_TRANSIENT_CAN_DUCK -> pause()
         }
@@ -120,6 +123,8 @@ class AudioPlayerManager(private val context: Context) {
                         currentPositionMs = 0L
                     )
                     stopTicker()
+                    // BUG-56: رهاسازی فوکوس صوتی در پایان پخش قطعه تا فوکوس سیستم بی‌جهت اشغال نماند
+                    abandonAudioFocus()
                 }
                 setOnErrorListener { mp, what, extra ->
                     // BUG-48: نادیده گرفتن خطای پلیر قبلی پس از تعویض یا آزادسازی
@@ -128,6 +133,7 @@ class AudioPlayerManager(private val context: Context) {
                         error = "خطا در پخش فایل صوتی (کد $what)"
                     )
                     stopTicker()
+                    abandonAudioFocus()
                     true
                 }
                 prepareAsync()
@@ -153,6 +159,14 @@ class AudioPlayerManager(private val context: Context) {
     fun resume() {
         try {
             val player = mediaPlayer ?: return
+            // BUG-56: اخذ مجدد فوکوس صوتی قبل از ادامه‌ی پخش
+            if (!requestAudioFocus()) {
+                _playerState.value = _playerState.value.copy(
+                    isPlaying = false,
+                    error = "پخش صوتی ممکن نیست؛ فوکوس صوتی در دسترس نیست."
+                )
+                return
+            }
             // If at end of track or position 0, seek to beginning before start
             if (_playerState.value.currentPositionMs >= _playerState.value.totalDurationMs && _playerState.value.totalDurationMs > 0) {
                 player.seekTo(0)
