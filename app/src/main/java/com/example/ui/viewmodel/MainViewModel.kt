@@ -290,6 +290,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 updatedAt = System.currentTimeMillis()
             )
             // BUG-55: تغییر نام پوشه فیزیکی و به‌روزرسانی مسیر صوتی قطعات در دیتابیس
+            // BUG-66: شکست rename نباید بی‌صدا بلعیده شود — نام پروژه در DB ثبت می‌شود ولی
+            // فایل‌های صوتی در پوشهٔ قدیمی می‌مانند؛ کاربر باید صریحاً مطلع شود.
+            var folderRenameWarning: String? = null
             if (oldName != newName) {
                 val oldDir = fileManager.getProjectDirectory(oldName, current.folderName)
                 val newDir = fileManager.getProjectDirectory(newName, current.folderName)
@@ -308,6 +311,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                         } catch (e: Exception) {
                             android.util.Log.w("MainViewModel", "Failed to update chunk audio paths after rename", e)
                         }
+                    } else {
+                        folderRenameWarning = "نام پروژه ثبت شد، اما تغییر نام پوشهٔ فایل‌های صوتی روی حافظه ناموفق بود؛ فایل‌های قبلی در پوشهٔ «$oldName» باقی مانده‌اند."
                     }
                 }
             }
@@ -328,7 +333,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     message = "پروژه «$oldName» تغییر نام داد به «$newName» در تاریخ $dateStr"
                 )
             }
-            showSnackbar("مشخصات پروژه به‌روزرسانی شد.")
+            showSnackbar(folderRenameWarning ?: "مشخصات پروژه به‌روزرسانی شد.")
         }
     }
 
