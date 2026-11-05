@@ -150,23 +150,8 @@ class FileManager(
         }
     }
 
-    /**
-     * BUG-55: تغییر نام پوشه پروژه در حافظه جهت جلوگیری از نشت دیسک و پراکندگی فایل‌ها
-     */
-    fun renameProjectFolder(oldProjectName: String, newProjectName: String, customRoot: String? = null): Boolean {
-        return try {
-            val root = getRootTtsDirectory(customRoot)
-            val oldDir = File(root, sanitizeFileName(oldProjectName))
-            val newDir = File(root, sanitizeFileName(newProjectName))
-            if (oldDir.exists() && oldDir != newDir) {
-                oldDir.renameTo(newDir)
-            } else {
-                true
-            }
-        } catch (e: Exception) {
-            false
-        }
-    }
+    // BUG-67: متد مردهٔ renameProjectFolder (باقی‌ماندهٔ فیکس BUG-55 — MainViewModel به‌جایش
+    // مستقیماً getProjectDirectory + renameTo را استفاده می‌کند) حذف شد؛ هیچ فراخوانی وجود ندارد.
 
     companion object {
         /**
