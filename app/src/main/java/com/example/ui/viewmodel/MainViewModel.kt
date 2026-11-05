@@ -274,7 +274,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun updateProjectDetails(name: String, description: String) {
         val current = _selectedProject.value ?: return
         val currentQueue = queueEngine.queueState.value
-        if (currentQueue.isRunning && (currentQueue.activeProjectId == current.id || _selectedProject.value?.id == current.id)) {
+        // BUG-65: شرط قبلی تاوتولوژیک بود (current همان _selectedProject.value است) و تغییر نام
+        // پروژهٔ انتخابی را هر زمان که صفِ «هر» پروژه‌ای در حال اجرا بود بلاک می‌کرد؛
+        // مسدودسازی فقط وقتی درست است که صفِ همین پروژه در حال اجرا باشد.
+        if (currentQueue.isRunning && currentQueue.activeProjectId == current.id) {
             showSnackbar("عملیات ممکن نیست؛ صف تبدیل این پروژه در حال اجراست.")
             return
         }
